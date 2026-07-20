@@ -3,6 +3,8 @@ name = "mcp-hayabusa"
 version = "0.1.0"
 description = "MCP server that wraps the Hayabusa Windows event log forensic timeline tool"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = [
     "mcp>=1.2.0",
