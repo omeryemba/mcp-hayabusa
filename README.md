@@ -1,5 +1,7 @@
 # mcp-hayabusa
 
+[![Tests](https://github.com/omeryemba/mcp-hayabusa/actions/workflows/test.yml/badge.svg)](https://github.com/omeryemba/mcp-hayabusa/actions/workflows/test.yml)
+
 An MCP (Model Context Protocol) server that wraps [Hayabusa](https://github.com/Yamato-Security/hayabusa), the Rust-based Windows event log (.evtx) fast forensic timeline generator and threat hunting tool.
 
 It shells out to a local `hayabusa` binary and exposes its analysis capabilities as MCP tools that an LLM client (Claude Desktop, Claude Code, etc.) can call directly against `.evtx` files.
