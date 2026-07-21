@@ -37,6 +37,8 @@ def _run(args: list[str], timeout_sec: int = DEFAULT_TIMEOUT_SEC) -> CommandResu
         command,
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=timeout_sec,
         check=False,
     )
