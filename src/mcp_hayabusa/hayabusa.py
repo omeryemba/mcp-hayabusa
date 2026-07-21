@@ -97,6 +97,7 @@ def csv_timeline(
             str(target_path),
             "-o",
             str(output_path),
+            "-w",
         ]
         if profile:
             args += ["-p", profile]
@@ -149,6 +150,8 @@ def json_timeline(
             str(target_path),
             "-o",
             str(output_path),
+            "-w",
+            "-L",
         ]
         if profile:
             args += ["-p", profile]
@@ -208,6 +211,7 @@ def search(
             str(target_path),
             "-o",
             str(output_path),
+            "-w",
         ]
         flag = "-r" if regex else "-k"
         for keyword in keywords:
