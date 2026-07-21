@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Scan output generated during manual testing
+samples/output/
+logs/
+
+# Editor/OS cruft
+.vscode/
+.DS_Store
