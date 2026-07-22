@@ -270,6 +270,57 @@ def test_logon_summary_missing_files_returns_empty(tmp_path, monkeypatch):
     }
 
 
+def test_pivot_keywords_list_parses_and_truncates(tmp_path, monkeypatch):
+    def fake_run(args, timeout_sec=600):
+        prefix = Path(args[args.index("-o") + 1])
+        prefix.with_name(prefix.name + "-Users.txt").write_text(
+            "alice\nbob\ncarol\nmallory\n", encoding="utf-8"
+        )
+        prefix.with_name(prefix.name + "-IP Addresses.txt").write_text(
+            "10.0.0.1\n10.0.0.2\n", encoding="utf-8"
+        )
+        return FakeResult(returncode=0, command=["hayabusa", *args])
+
+    monkeypatch.setattr(hayabusa, "_run", fake_run)
+    monkeypatch.setattr(hayabusa, "_require_existing_path", lambda p, label="target": tmp_path)
+
+    result = hayabusa.pivot_keywords_list(str(tmp_path), max_keywords=2)
+
+    assert result["categories"]["Users"]["total_keywords"] == 4
+    assert result["categories"]["Users"]["returned_keywords"] == 2
+    assert result["categories"]["Users"]["truncated"] is True
+    assert result["categories"]["Users"]["keywords"] == ["alice", "bob"]
+    assert result["categories"]["IP Addresses"]["total_keywords"] == 2
+    assert result["categories"]["IP Addresses"]["truncated"] is False
+
+
+def test_pivot_keywords_list_min_level_flag_passed(tmp_path, monkeypatch):
+    captured = {}
+
+    def fake_run(args, timeout_sec=600):
+        captured["args"] = args
+        return FakeResult(returncode=0, command=["hayabusa", *args])
+
+    monkeypatch.setattr(hayabusa, "_run", fake_run)
+    monkeypatch.setattr(hayabusa, "_require_existing_path", lambda p, label="target": tmp_path)
+
+    hayabusa.pivot_keywords_list(str(tmp_path), min_level="high")
+
+    args = captured["args"]
+    assert args[args.index("-m") + 1] == "high"
+
+
+def test_pivot_keywords_list_no_files_returns_empty(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        hayabusa, "_run", lambda args, timeout_sec=600: FakeResult(returncode=0, command=["hayabusa"])
+    )
+    monkeypatch.setattr(hayabusa, "_require_existing_path", lambda p, label="target": tmp_path)
+
+    result = hayabusa.pivot_keywords_list(str(tmp_path))
+
+    assert result["categories"] == {}
+
+
 def test_search_requires_keywords(tmp_path, monkeypatch):
     monkeypatch.setattr(hayabusa, "_require_existing_path", lambda p, label="target": tmp_path)
     with pytest.raises(ValueError):
