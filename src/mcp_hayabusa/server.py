@@ -100,6 +100,19 @@ def hayabusa_eid_metrics(target: str, max_rows: int = 200) -> dict:
 
 
 @mcp.tool()
+def hayabusa_extract_base64(target: str, max_rows: int = 200) -> dict:
+    """Extract and decode base64-encoded strings found in .evtx event fields.
+
+    Useful for catching obfuscated PowerShell/command-line payloads.
+
+    Args:
+        target: Path to an .evtx file or a directory containing .evtx files.
+        max_rows: Maximum number of result rows to return (default 200).
+    """
+    return hayabusa.extract_base64(target, max_rows=max_rows)
+
+
+@mcp.tool()
 def hayabusa_log_metrics(target: str, max_rows: int = 200) -> dict:
     """Output evtx file metadata (channels, event count, date range, etc.).
 
