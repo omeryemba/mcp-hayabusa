@@ -1,6 +1,9 @@
 # mcp-hayabusa
 
 [![Tests](https://github.com/omeryemba/mcp-hayabusa/actions/workflows/test.yml/badge.svg)](https://github.com/omeryemba/mcp-hayabusa/actions/workflows/test.yml)
+![Version](https://img.shields.io/badge/version-0.1.0-blue)
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 An MCP (Model Context Protocol) server that wraps [Hayabusa](https://github.com/Yamato-Security/hayabusa), the Rust-based Windows event log (.evtx) fast forensic timeline generator and threat hunting tool.
 
