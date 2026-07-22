@@ -113,6 +113,74 @@ def test_eid_metrics_missing_output_returns_empty(tmp_path, monkeypatch):
     assert result["truncated"] is False
 
 
+def test_log_metrics_parses_and_truncates(tmp_path, monkeypatch):
+    def fake_run(args, timeout_sec=600):
+        output_path = Path(args[args.index("-o") + 1])
+        with output_path.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["Filename", "Total"])
+            for i in range(5):
+                writer.writerow([f"file{i}.evtx", str(i)])
+        return FakeResult(returncode=0, command=["hayabusa", *args])
+
+    monkeypatch.setattr(hayabusa, "_run", fake_run)
+    monkeypatch.setattr(hayabusa, "_require_existing_path", lambda p, label="target": tmp_path)
+
+    result = hayabusa.log_metrics(str(tmp_path), max_rows=2)
+
+    assert result["total_rows"] == 5
+    assert result["returned_rows"] == 2
+    assert result["truncated"] is True
+    assert result["rows"][0]["Filename"] == "file0.evtx"
+
+
+def test_log_metrics_missing_output_returns_empty(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        hayabusa, "_run", lambda args, timeout_sec=600: FakeResult(returncode=0, command=["hayabusa"])
+    )
+    monkeypatch.setattr(hayabusa, "_require_existing_path", lambda p, label="target": tmp_path)
+
+    result = hayabusa.log_metrics(str(tmp_path))
+
+    assert result["total_rows"] == 0
+    assert result["rows"] == []
+    assert result["truncated"] is False
+
+
+def test_computer_metrics_parses_and_truncates(tmp_path, monkeypatch):
+    def fake_run(args, timeout_sec=600):
+        output_path = Path(args[args.index("-o") + 1])
+        with output_path.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["Computer", "Events"])
+            for i in range(5):
+                writer.writerow([f"HOST-{i}", str(i)])
+        return FakeResult(returncode=0, command=["hayabusa", *args])
+
+    monkeypatch.setattr(hayabusa, "_run", fake_run)
+    monkeypatch.setattr(hayabusa, "_require_existing_path", lambda p, label="target": tmp_path)
+
+    result = hayabusa.computer_metrics(str(tmp_path), max_rows=2)
+
+    assert result["total_rows"] == 5
+    assert result["returned_rows"] == 2
+    assert result["truncated"] is True
+    assert result["rows"][0]["Computer"] == "HOST-0"
+
+
+def test_computer_metrics_missing_output_returns_empty(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        hayabusa, "_run", lambda args, timeout_sec=600: FakeResult(returncode=0, command=["hayabusa"])
+    )
+    monkeypatch.setattr(hayabusa, "_require_existing_path", lambda p, label="target": tmp_path)
+
+    result = hayabusa.computer_metrics(str(tmp_path))
+
+    assert result["total_rows"] == 0
+    assert result["rows"] == []
+    assert result["truncated"] is False
+
+
 def test_logon_summary_parses_both_files(tmp_path, monkeypatch):
     def fake_run(args, timeout_sec=600):
         prefix = Path(args[args.index("-o") + 1])
