@@ -62,3 +62,5 @@ The server communicates over stdio, so it's meant to be launched by an MCP clien
 ```bash
 pytest
 ```
+
+All tests run against mocked subprocess calls, so no real `hayabusa` binary or `.evtx` file is required. Coverage is split across `tests/test_hayabusa.py` (the CLI wrapper functions), `tests/test_config.py` (binary resolution via `HAYABUSA_BIN`/`PATH`), and `tests/test_server.py` (the MCP tool registrations themselves).

@@ -47,7 +47,12 @@ Three-module core under `src/mcp_hayabusa/`:
 1. Add a wrapper function in `hayabusa.py` following the existing pattern (validate target → build argv → run via `_run` → parse temp-file output → return bounded dict).
 2. Register it in `server.py` with `@mcp.tool()` and a docstring describing args/behavior (this is what the model sees).
 3. Add a test in `tests/test_hayabusa.py` that monkeypatches `hayabusa._run` (and `_require_existing_path` where relevant) to avoid depending on a real `hayabusa` binary or real `.evtx` files.
+4. Add a case to `tests/test_server.py` asserting the new tool is registered and that its kwargs are forwarded to the `hayabusa.py` function unchanged (monkeypatch the `hayabusa.*` function directly, not `_run`).
 
 ## Testing conventions
 
-Tests never invoke the real `hayabusa` binary. They monkeypatch `hayabusa._run` to return a `FakeResult` (and write whatever CSV/JSONL the real binary would have produced to the `-o` path passed in `args`), and monkeypatch `hayabusa._require_existing_path` when target-path validation would otherwise fail on a nonexistent path. See `tests/test_hayabusa.py` for the pattern.
+Tests never invoke the real `hayabusa` binary, and are split across three files by what they exercise:
+
+- **`tests/test_hayabusa.py`** — the CLI wrapper functions in `hayabusa.py`. Monkeypatches `hayabusa._run` to return a `FakeResult` (and writes whatever CSV/JSONL the real binary would have produced to the `-o` path passed in `args`), and monkeypatches `hayabusa._require_existing_path` when target-path validation would otherwise fail on a nonexistent path. Covers success/failure/edge-case paths for every public function (`version`, `list_profiles`, `update_rules`, `csv_timeline`, `json_timeline`, `search`), including the optional-flag argv construction and `json_timeline`'s JSONL quirks (bracket lines, trailing commas, malformed-line skipping).
+- **`tests/test_config.py`** — `resolve_hayabusa_binary()` in `config.py`. Uses `monkeypatch.setenv`/`delenv` for `HAYABUSA_BIN` and monkeypatches `shutil.which` to cover the env-var, `PATH`-fallback, and not-found cases without touching the real filesystem/`PATH`.
+- **`tests/test_server.py`** — the `@mcp.tool()` registrations in `server.py`, i.e. the actual integration surface MCP clients call. Monkeypatches the `hayabusa.*` functions directly (not `_run`) and drives them through the real `FastMCP` instance via `asyncio.run(server.mcp.list_tools())` / `asyncio.run(server.mcp.call_tool(name, arguments))`, asserting that each tool is registered and that its kwargs are forwarded to `hayabusa.py` unchanged — this is what catches a signature/kwarg drift between a tool wrapper and the function it wraps.
