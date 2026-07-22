@@ -113,6 +113,40 @@ def test_eid_metrics_missing_output_returns_empty(tmp_path, monkeypatch):
     assert result["truncated"] is False
 
 
+def test_extract_base64_parses_and_truncates(tmp_path, monkeypatch):
+    def fake_run(args, timeout_sec=600):
+        output_path = Path(args[args.index("-o") + 1])
+        with output_path.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["Timestamp", "Decoded"])
+            for i in range(5):
+                writer.writerow([f"2024-01-01T00:00:0{i}Z", f"payload-{i}"])
+        return FakeResult(returncode=0, command=["hayabusa", *args])
+
+    monkeypatch.setattr(hayabusa, "_run", fake_run)
+    monkeypatch.setattr(hayabusa, "_require_existing_path", lambda p, label="target": tmp_path)
+
+    result = hayabusa.extract_base64(str(tmp_path), max_rows=2)
+
+    assert result["total_rows"] == 5
+    assert result["returned_rows"] == 2
+    assert result["truncated"] is True
+    assert result["rows"][0]["Decoded"] == "payload-0"
+
+
+def test_extract_base64_missing_output_returns_empty(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        hayabusa, "_run", lambda args, timeout_sec=600: FakeResult(returncode=0, command=["hayabusa"])
+    )
+    monkeypatch.setattr(hayabusa, "_require_existing_path", lambda p, label="target": tmp_path)
+
+    result = hayabusa.extract_base64(str(tmp_path))
+
+    assert result["total_rows"] == 0
+    assert result["rows"] == []
+    assert result["truncated"] is False
+
+
 def test_log_metrics_parses_and_truncates(tmp_path, monkeypatch):
     def fake_run(args, timeout_sec=600):
         output_path = Path(args[args.index("-o") + 1])

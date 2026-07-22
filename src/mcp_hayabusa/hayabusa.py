@@ -241,6 +241,45 @@ def eid_metrics(
     }
 
 
+def extract_base64(
+    target: str,
+    *,
+    max_rows: int = MAX_ROWS_RETURNED,
+    timeout_sec: int = DEFAULT_TIMEOUT_SEC,
+) -> dict:
+    target_path = _require_existing_path(target)
+
+    with tempfile.TemporaryDirectory(prefix="mcp_hayabusa_") as tmpdir:
+        output_path = Path(tmpdir) / "extract-base64.csv"
+        args = [
+            "extract-base64",
+            "-d" if target_path.is_dir() else "-f",
+            str(target_path),
+            "-o",
+            str(output_path),
+        ]
+
+        result = _run(args, timeout_sec=timeout_sec)
+
+        rows: list[dict] = []
+        total = 0
+        if output_path.exists():
+            with output_path.open(newline="", encoding="utf-8-sig") as f:
+                for row in csv.DictReader(f):
+                    total += 1
+                    if len(rows) < max_rows:
+                        rows.append(row)
+
+    return {
+        "command": _command_str(result),
+        "total_rows": total,
+        "returned_rows": len(rows),
+        "truncated": total > len(rows),
+        "rows": rows,
+        "stderr_summary": result.stderr.strip()[-2000:] if result.stderr else "",
+    }
+
+
 def log_metrics(
     target: str,
     *,

@@ -9,6 +9,7 @@ EXPECTED_TOOL_NAMES = {
     "hayabusa_csv_timeline",
     "hayabusa_json_timeline",
     "hayabusa_eid_metrics",
+    "hayabusa_extract_base64",
     "hayabusa_log_metrics",
     "hayabusa_computer_metrics",
     "hayabusa_logon_summary",
@@ -88,6 +89,34 @@ def test_call_tool_eid_metrics_passes_kwargs(monkeypatch):
     asyncio.run(
         server.mcp.call_tool(
             "hayabusa_eid_metrics",
+            {"target": "/some/path.evtx", "max_rows": 50},
+        )
+    )
+
+    assert captured["target"] == "/some/path.evtx"
+    assert captured["kwargs"] == {"max_rows": 50}
+
+
+def test_call_tool_extract_base64_passes_kwargs(monkeypatch):
+    captured = {}
+
+    def fake_extract_base64(target, **kwargs):
+        captured["target"] = target
+        captured["kwargs"] = kwargs
+        return {
+            "command": "hayabusa extract-base64",
+            "total_rows": 0,
+            "returned_rows": 0,
+            "truncated": False,
+            "rows": [],
+            "stderr_summary": "",
+        }
+
+    monkeypatch.setattr(hayabusa, "extract_base64", fake_extract_base64)
+
+    asyncio.run(
+        server.mcp.call_tool(
+            "hayabusa_extract_base64",
             {"target": "/some/path.evtx", "max_rows": 50},
         )
     )
