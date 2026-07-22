@@ -100,6 +100,28 @@ def hayabusa_eid_metrics(target: str, max_rows: int = 200) -> dict:
 
 
 @mcp.tool()
+def hayabusa_log_metrics(target: str, max_rows: int = 200) -> dict:
+    """Output evtx file metadata (channels, event count, date range, etc.).
+
+    Args:
+        target: Path to an .evtx file or a directory containing .evtx files.
+        max_rows: Maximum number of result rows to return (default 200).
+    """
+    return hayabusa.log_metrics(target, max_rows=max_rows)
+
+
+@mcp.tool()
+def hayabusa_computer_metrics(target: str, max_rows: int = 200) -> dict:
+    """Count events per computer name across .evtx file(s).
+
+    Args:
+        target: Path to an .evtx file or a directory containing .evtx files.
+        max_rows: Maximum number of result rows to return (default 200).
+    """
+    return hayabusa.computer_metrics(target, max_rows=max_rows)
+
+
+@mcp.tool()
 def hayabusa_logon_summary(target: str, max_rows: int = 200) -> dict:
     """Summarize successful and failed logon events across .evtx file(s).
 

@@ -9,6 +9,8 @@ EXPECTED_TOOL_NAMES = {
     "hayabusa_csv_timeline",
     "hayabusa_json_timeline",
     "hayabusa_eid_metrics",
+    "hayabusa_log_metrics",
+    "hayabusa_computer_metrics",
     "hayabusa_logon_summary",
     "hayabusa_search",
 }
@@ -86,6 +88,62 @@ def test_call_tool_eid_metrics_passes_kwargs(monkeypatch):
     asyncio.run(
         server.mcp.call_tool(
             "hayabusa_eid_metrics",
+            {"target": "/some/path.evtx", "max_rows": 50},
+        )
+    )
+
+    assert captured["target"] == "/some/path.evtx"
+    assert captured["kwargs"] == {"max_rows": 50}
+
+
+def test_call_tool_log_metrics_passes_kwargs(monkeypatch):
+    captured = {}
+
+    def fake_log_metrics(target, **kwargs):
+        captured["target"] = target
+        captured["kwargs"] = kwargs
+        return {
+            "command": "hayabusa log-metrics",
+            "total_rows": 0,
+            "returned_rows": 0,
+            "truncated": False,
+            "rows": [],
+            "stderr_summary": "",
+        }
+
+    monkeypatch.setattr(hayabusa, "log_metrics", fake_log_metrics)
+
+    asyncio.run(
+        server.mcp.call_tool(
+            "hayabusa_log_metrics",
+            {"target": "/some/path.evtx", "max_rows": 50},
+        )
+    )
+
+    assert captured["target"] == "/some/path.evtx"
+    assert captured["kwargs"] == {"max_rows": 50}
+
+
+def test_call_tool_computer_metrics_passes_kwargs(monkeypatch):
+    captured = {}
+
+    def fake_computer_metrics(target, **kwargs):
+        captured["target"] = target
+        captured["kwargs"] = kwargs
+        return {
+            "command": "hayabusa computer-metrics",
+            "total_rows": 0,
+            "returned_rows": 0,
+            "truncated": False,
+            "rows": [],
+            "stderr_summary": "",
+        }
+
+    monkeypatch.setattr(hayabusa, "computer_metrics", fake_computer_metrics)
+
+    asyncio.run(
+        server.mcp.call_tool(
+            "hayabusa_computer_metrics",
             {"target": "/some/path.evtx", "max_rows": 50},
         )
     )
