@@ -55,6 +55,13 @@ The server communicates over stdio, so it's meant to be launched by an MCP clien
 | `hayabusa_update_rules` | Update the Sigma detection rule set. |
 | `hayabusa_csv_timeline` | Run `csv-timeline` over an `.evtx` file or directory; returns bounded rows + total count. |
 | `hayabusa_json_timeline` | Run `json-timeline` over an `.evtx` file or directory; returns bounded JSON records + total count. |
+| `hayabusa_eid_metrics` | Count event occurrences by Event ID. |
+| `hayabusa_computer_metrics` | Count events per computer name. |
+| `hayabusa_log_metrics` | Output `.evtx` file metadata (channels, event count, date range, etc.). |
+| `hayabusa_logon_summary` | Summarize successful and failed logon events. |
+| `hayabusa_pivot_keywords_list` | Extract pivot keywords (users, computers, IPs, processes, command lines, etc.) by category. |
+| `hayabusa_extract_base64` | Extract and decode base64-encoded strings from event fields. |
+| `hayabusa_config_critical_systems` | Detect likely domain controllers and file servers from the logs. |
 | `hayabusa_search` | Keyword/regex search over `.evtx` event records. |
 
 ## Tests
