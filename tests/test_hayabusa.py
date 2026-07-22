@@ -15,10 +15,37 @@ class FakeResult:
 
 
 def test_version(monkeypatch):
-    monkeypatch.setattr(
-        hayabusa, "_run", lambda args, timeout_sec=30: FakeResult(stdout="hayabusa v3.0.0\n")
+    help_output = (
+        "Hayabusa v3.10.0 - Independence Day Release\n"
+        "Yamato Security (https://github.com/Yamato-Security/hayabusa)\n"
+        "\n"
+        "Usage:\n"
+        "  hayabusa.exe <COMMAND> [OPTIONS]\n"
     )
-    assert hayabusa.version() == "hayabusa v3.0.0"
+    monkeypatch.setattr(
+        hayabusa, "_run", lambda args, timeout_sec=30: FakeResult(stdout=help_output)
+    )
+    assert hayabusa.version() == "v3.10.0 - Independence Day Release"
+
+
+def test_version_calls_help_subcommand(monkeypatch):
+    captured = {}
+
+    def fake_run(args, timeout_sec=30):
+        captured["args"] = args
+        return FakeResult(stdout="Hayabusa v3.10.0 - Independence Day Release\n")
+
+    monkeypatch.setattr(hayabusa, "_run", fake_run)
+    hayabusa.version()
+    assert captured["args"] == ["help"]
+
+
+def test_version_unparseable_output_raises(monkeypatch):
+    monkeypatch.setattr(
+        hayabusa, "_run", lambda args, timeout_sec=30: FakeResult(stdout="unexpected output\n")
+    )
+    with pytest.raises(RuntimeError):
+        hayabusa.version()
 
 
 def test_csv_timeline_parses_and_truncates(tmp_path, monkeypatch):

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import csv
 import json
+import re
 import shlex
 import subprocess
 import tempfile
@@ -56,12 +57,20 @@ def _command_str(result: CommandResult) -> str:
     return " ".join(shlex.quote(part) for part in result.command)
 
 
+_VERSION_RE = re.compile(r"Hayabusa\s+(v[\d][^\r\n]*)", re.IGNORECASE)
+
+
 def version() -> str:
-    result = _run(["--version"], timeout_sec=30)
+    # hayabusa has no --version flag; the version is printed as the first
+    # line of its `help` banner (e.g. "Hayabusa v3.10.0 - ... Release").
+    result = _run(["help"], timeout_sec=30)
     output = (result.stdout or result.stderr).strip()
     if result.returncode != 0 and not output:
-        raise RuntimeError(f"hayabusa --version failed: {result.stderr}")
-    return output
+        raise RuntimeError(f"hayabusa help failed: {result.stderr}")
+    match = _VERSION_RE.search(output)
+    if not match:
+        raise RuntimeError(f"could not parse hayabusa version from help output: {output!r}")
+    return match.group(1).strip()
 
 
 def list_profiles() -> str:
