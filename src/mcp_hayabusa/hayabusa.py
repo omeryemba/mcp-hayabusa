@@ -202,6 +202,103 @@ def json_timeline(
     }
 
 
+def eid_metrics(
+    target: str,
+    *,
+    max_rows: int = MAX_ROWS_RETURNED,
+    timeout_sec: int = DEFAULT_TIMEOUT_SEC,
+) -> dict:
+    target_path = _require_existing_path(target)
+
+    with tempfile.TemporaryDirectory(prefix="mcp_hayabusa_") as tmpdir:
+        output_path = Path(tmpdir) / "eid-metrics.csv"
+        args = [
+            "eid-metrics",
+            "-d" if target_path.is_dir() else "-f",
+            str(target_path),
+            "-o",
+            str(output_path),
+        ]
+
+        result = _run(args, timeout_sec=timeout_sec)
+
+        rows: list[dict] = []
+        total = 0
+        if output_path.exists():
+            with output_path.open(newline="", encoding="utf-8-sig") as f:
+                for row in csv.DictReader(f):
+                    total += 1
+                    if len(rows) < max_rows:
+                        rows.append(row)
+
+    return {
+        "command": _command_str(result),
+        "total_rows": total,
+        "returned_rows": len(rows),
+        "truncated": total > len(rows),
+        "rows": rows,
+        "stderr_summary": result.stderr.strip()[-2000:] if result.stderr else "",
+    }
+
+
+def logon_summary(
+    target: str,
+    *,
+    max_rows: int = MAX_ROWS_RETURNED,
+    timeout_sec: int = DEFAULT_TIMEOUT_SEC,
+) -> dict:
+    target_path = _require_existing_path(target)
+
+    with tempfile.TemporaryDirectory(prefix="mcp_hayabusa_") as tmpdir:
+        output_prefix = Path(tmpdir) / "logon-summary"
+        args = [
+            "logon-summary",
+            "-d" if target_path.is_dir() else "-f",
+            str(target_path),
+            "-o",
+            str(output_prefix),
+        ]
+
+        result = _run(args, timeout_sec=timeout_sec)
+
+        def _read_csv(path: Path) -> tuple[list[dict], int]:
+            rows: list[dict] = []
+            total = 0
+            if path.exists():
+                with path.open(newline="", encoding="utf-8-sig") as f:
+                    for row in csv.DictReader(f):
+                        total += 1
+                        if len(rows) < max_rows:
+                            rows.append(row)
+            return rows, total
+
+        # hayabusa writes two files from the -o prefix: "<prefix>-successful.csv"
+        # and "<prefix>-failed.csv".
+        successful_rows, successful_total = _read_csv(
+            output_prefix.with_name(output_prefix.name + "-successful.csv")
+        )
+        failed_rows, failed_total = _read_csv(
+            output_prefix.with_name(output_prefix.name + "-failed.csv")
+        )
+
+    return {
+        "command": _command_str(result),
+        "successful": {
+            "total_rows": successful_total,
+            "returned_rows": len(successful_rows),
+            "truncated": successful_total > len(successful_rows),
+            "rows": successful_rows,
+        },
+        "failed": {
+            "total_rows": failed_total,
+            "returned_rows": len(failed_rows),
+            "truncated": failed_total > len(failed_rows),
+            "rows": failed_rows,
+        },
+        "stderr_summary": result.stderr.strip()[-2000:] if result.stderr else "",
+    }
+
+
 def search(
     target: str,
     keywords: list[str],

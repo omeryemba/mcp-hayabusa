@@ -79,6 +79,95 @@ def test_csv_timeline_missing_output_raises(tmp_path, monkeypatch):
         hayabusa.csv_timeline(str(tmp_path))
 
 
+def test_eid_metrics_parses_and_truncates(tmp_path, monkeypatch):
+    def fake_run(args, timeout_sec=600):
+        output_path = Path(args[args.index("-o") + 1])
+        with output_path.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["EventID", "Occurrences"])
+            for i in range(5):
+                writer.writerow([f"{4000 + i}", str(i)])
+        return FakeResult(returncode=0, command=["hayabusa", *args])
+
+    monkeypatch.setattr(hayabusa, "_run", fake_run)
+    monkeypatch.setattr(hayabusa, "_require_existing_path", lambda p, label="target": tmp_path)
+
+    result = hayabusa.eid_metrics(str(tmp_path), max_rows=2)
+
+    assert result["total_rows"] == 5
+    assert result["returned_rows"] == 2
+    assert result["truncated"] is True
+    assert result["rows"][0]["EventID"] == "4000"
+
+
+def test_eid_metrics_missing_output_returns_empty(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        hayabusa, "_run", lambda args, timeout_sec=600: FakeResult(returncode=0, command=["hayabusa"])
+    )
+    monkeypatch.setattr(hayabusa, "_require_existing_path", lambda p, label="target": tmp_path)
+
+    result = hayabusa.eid_metrics(str(tmp_path))
+
+    assert result["total_rows"] == 0
+    assert result["rows"] == []
+    assert result["truncated"] is False
+
+
+def test_logon_summary_parses_both_files(tmp_path, monkeypatch):
+    def fake_run(args, timeout_sec=600):
+        prefix = Path(args[args.index("-o") + 1])
+        with prefix.with_name(prefix.name + "-successful.csv").open(
+            "w", newline="", encoding="utf-8"
+        ) as f:
+            writer = csv.writer(f)
+            writer.writerow(["Target Account", "Source Computer"])
+            writer.writerow(["alice", "HOST-A"])
+            writer.writerow(["bob", "HOST-B"])
+        with prefix.with_name(prefix.name + "-failed.csv").open(
+            "w", newline="", encoding="utf-8"
+        ) as f:
+            writer = csv.writer(f)
+            writer.writerow(["Target Account", "Source Computer"])
+            writer.writerow(["mallory", "HOST-C"])
+        return FakeResult(returncode=0, command=["hayabusa", *args])
+
+    monkeypatch.setattr(hayabusa, "_run", fake_run)
+    monkeypatch.setattr(hayabusa, "_require_existing_path", lambda p, label="target": tmp_path)
+
+    result = hayabusa.logon_summary(str(tmp_path), max_rows=1)
+
+    assert result["successful"]["total_rows"] == 2
+    assert result["successful"]["returned_rows"] == 1
+    assert result["successful"]["truncated"] is True
+    assert result["successful"]["rows"][0]["Target Account"] == "alice"
+    assert result["failed"]["total_rows"] == 1
+    assert result["failed"]["returned_rows"] == 1
+    assert result["failed"]["truncated"] is False
+    assert result["failed"]["rows"][0]["Target Account"] == "mallory"
+
+
+def test_logon_summary_missing_files_returns_empty(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        hayabusa, "_run", lambda args, timeout_sec=600: FakeResult(returncode=0, command=["hayabusa"])
+    )
+    monkeypatch.setattr(hayabusa, "_require_existing_path", lambda p, label="target": tmp_path)
+
+    result = hayabusa.logon_summary(str(tmp_path))
+
+    assert result["successful"] == {
+        "total_rows": 0,
+        "returned_rows": 0,
+        "truncated": False,
+        "rows": [],
+    }
+    assert result["failed"] == {
+        "total_rows": 0,
+        "returned_rows": 0,
+        "truncated": False,
+        "rows": [],
+    }
+
+
 def test_search_requires_keywords(tmp_path, monkeypatch):
     monkeypatch.setattr(hayabusa, "_require_existing_path", lambda p, label="target": tmp_path)
     with pytest.raises(ValueError):
