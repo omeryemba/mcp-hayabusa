@@ -149,6 +149,28 @@ def hayabusa_logon_summary(target: str, max_rows: int = 200) -> dict:
 
 
 @mcp.tool()
+def hayabusa_pivot_keywords_list(
+    target: str,
+    min_level: str | None = None,
+    max_keywords: int = 200,
+) -> dict:
+    """Extract pivot keywords (users, computers, IPs, etc.) from .evtx file(s).
+
+    Returns a dict of category name -> bounded keyword list, e.g.
+    "Users", "IP Addresses", "Processes", "Command Lines" (categories
+    come from hayabusa's pivot_keywords.txt config).
+
+    Args:
+        target: Path to an .evtx file or a directory containing .evtx files.
+        min_level: Optional minimum alert level to include, e.g.
+            "informational", "low", "medium", "high", or "critical".
+        max_keywords: Maximum number of keywords to return per category
+            (default 200).
+    """
+    return hayabusa.pivot_keywords_list(target, min_level=min_level, max_keywords=max_keywords)
+
+
+@mcp.tool()
 def hayabusa_search(
     target: str,
     keywords: list[str],

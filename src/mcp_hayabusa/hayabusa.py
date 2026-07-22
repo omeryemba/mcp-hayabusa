@@ -416,6 +416,54 @@ def logon_summary(
     }
 
 
+def pivot_keywords_list(
+    target: str,
+    *,
+    min_level: str | None = None,
+    max_keywords: int = MAX_ROWS_RETURNED,
+    timeout_sec: int = DEFAULT_TIMEOUT_SEC,
+) -> dict:
+    target_path = _require_existing_path(target)
+
+    with tempfile.TemporaryDirectory(prefix="mcp_hayabusa_") as tmpdir:
+        output_prefix = Path(tmpdir) / "pivot-keywords"
+        args = [
+            "pivot-keywords-list",
+            "-d" if target_path.is_dir() else "-f",
+            str(target_path),
+            "-o",
+            str(output_prefix),
+            "-w",
+        ]
+        if min_level:
+            args += ["-m", min_level]
+
+        result = _run(args, timeout_sec=timeout_sec)
+
+        # hayabusa writes one file per pivot keyword category, named
+        # "<prefix>-<Category Name>.txt" (categories come from
+        # rules/config/pivot_keywords.txt, e.g. "Users", "IP Addresses").
+        categories: dict[str, dict] = {}
+        prefix_name = output_prefix.name
+        for path in sorted(Path(tmpdir).glob(f"{prefix_name}-*.txt")):
+            category = path.stem[len(prefix_name) + 1 :]
+            with path.open(encoding="utf-8-sig") as f:
+                values = [line.strip() for line in f if line.strip()]
+            total = len(values)
+            categories[category] = {
+                "total_keywords": total,
+                "returned_keywords": min(total, max_keywords),
+                "truncated": total > max_keywords,
+                "keywords": values[:max_keywords],
+            }
+
+    return {
+        "command": _command_str(result),
+        "categories": categories,
+        "stderr_summary": result.stderr.strip()[-2000:] if result.stderr else "",
+    }
+
+
 def search(
     target: str,
     keywords: list[str],
