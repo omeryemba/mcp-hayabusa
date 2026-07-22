@@ -171,6 +171,30 @@ def hayabusa_pivot_keywords_list(
 
 
 @mcp.tool()
+def hayabusa_config_critical_systems(target: str, max_hosts: int = 200) -> dict:
+    """Find likely domain controllers and file servers from .evtx event logs.
+
+    Detects domain controllers via Security EID 4768 (Kerberos TGT
+    requests, only logged by DCs) and file servers via Security EID 5145
+    (network share access, excluding the universal IPC$ share).
+
+    Unlike other tools here, hayabusa has no file-output option for this
+    subcommand and normally asks an interactive yes/no question about
+    saving each found category to its local config. That prompt can't be
+    answered non-interactively, so on a hit this call may take close to
+    its timeout to return; when it does, prompt_interrupted will be true
+    in the result and any category not present in "categories" was never
+    reached, not confirmed as empty.
+
+    Args:
+        target: Path to an .evtx file or a directory containing .evtx files.
+        max_hosts: Maximum number of hostnames to return per category
+            (default 200).
+    """
+    return hayabusa.config_critical_systems(target, max_hosts=max_hosts)
+
+
+@mcp.tool()
 def hayabusa_search(
     target: str,
     keywords: list[str],

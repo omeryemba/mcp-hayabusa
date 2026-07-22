@@ -22,6 +22,10 @@ from .config import resolve_hayabusa_binary
 DEFAULT_TIMEOUT_SEC = 600
 MAX_ROWS_RETURNED = 200
 
+# Synthetic returncode used when a command is killed for exceeding timeout_sec
+# (real hayabusa exit codes are always >= 0).
+TIMEOUT_RETURNCODE = -1
+
 
 @dataclass
 class CommandResult:
@@ -34,15 +38,27 @@ class CommandResult:
 def _run(args: list[str], timeout_sec: int = DEFAULT_TIMEOUT_SEC) -> CommandResult:
     binary = resolve_hayabusa_binary()
     command = [binary, *args]
-    proc = subprocess.run(
-        command,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=timeout_sec,
-        check=False,
-    )
+    try:
+        proc = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout_sec,
+            check=False,
+            # Some subcommands (e.g. config-critical-systems) can drop into an
+            # interactive confirmation prompt when they find results. Without
+            # this, the child would inherit our own stdin -- the MCP client's
+            # JSON-RPC pipe -- and could hang reading it or corrupt the
+            # protocol stream. /dev/null guarantees it just sees EOF.
+            stdin=subprocess.DEVNULL,
+        )
+    except subprocess.TimeoutExpired as exc:
+        # Surface whatever was captured before the kill instead of raising,
+        # since a stuck interactive prompt is a meaningful outcome on its own
+        # (see config_critical_systems), not just an execution failure.
+        return CommandResult(TIMEOUT_RETURNCODE, exc.stdout or "", exc.stderr or "", command)
     return CommandResult(proc.returncode, proc.stdout, proc.stderr, command)
 
 
@@ -460,6 +476,89 @@ def pivot_keywords_list(
     return {
         "command": _command_str(result),
         "categories": categories,
+        "stderr_summary": result.stderr.strip()[-2000:] if result.stderr else "",
+    }
+
+
+_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+_CATEGORY_FOUND_RE = re.compile(r"^(.+) found \(\d+\):$")
+_CATEGORY_NONE_RE = re.compile(r"^No (.+) found\.$")
+
+# The "none found" line prints the Rust enum's Debug name (e.g.
+# "DomainController"), while the "found" line prints its pretty display name
+# (e.g. "Domain Controllers"). Normalize both to the pretty form so a category
+# has one consistent key regardless of whether it had matches.
+_CRITICAL_SYSTEM_CATEGORY_NAMES = {
+    "DomainController": "Domain Controllers",
+    "FileServer": "File Servers",
+}
+
+
+def config_critical_systems(
+    target: str,
+    *,
+    max_hosts: int = MAX_ROWS_RETURNED,
+    timeout_sec: int = DEFAULT_TIMEOUT_SEC,
+) -> dict:
+    # Unlike every other subcommand, this one has no -o file output -- it
+    # only prints to stdout, and it drops into an interactive confirmation
+    # prompt ("add these hosts to critical_systems.txt?") for each category
+    # where it finds matches. That prompt can't be answered here (see _run's
+    # stdin=DEVNULL), so hayabusa just hangs on it until timeout_sec kills
+    # the process. That is expected, not an error: hayabusa prints a
+    # category's results before prompting about it, so the partial stdout
+    # _run recovers on timeout already contains everything found for
+    # categories reached before the hang. Any category after the one it got
+    # stuck on is simply not in the output at all -- "not present in
+    # categories" does not mean "none found" when prompt_interrupted is True.
+    target_path = _require_existing_path(target)
+
+    args = [
+        "config-critical-systems",
+        "-d" if target_path.is_dir() else "-f",
+        str(target_path),
+        "-K",
+        "-q",
+    ]
+
+    result = _run(args, timeout_sec=timeout_sec)
+    output = _ANSI_ESCAPE_RE.sub("", result.stdout)
+
+    prompt_interrupted = result.returncode == TIMEOUT_RETURNCODE
+    if not prompt_interrupted and result.returncode != 0 and not output.strip():
+        raise RuntimeError(f"hayabusa config-critical-systems failed: {result.stderr}")
+
+    categories: dict[str, dict] = {}
+    current_category: str | None = None
+    for raw_line in output.splitlines():
+        line = raw_line.strip()
+        if not line:
+            current_category = None
+            continue
+        found_match = _CATEGORY_FOUND_RE.match(line)
+        none_match = _CATEGORY_NONE_RE.match(line)
+        if found_match:
+            current_category = found_match.group(1)
+            categories[current_category] = {"hosts": []}
+        elif none_match:
+            debug_name = none_match.group(1)
+            categories[_CRITICAL_SYSTEM_CATEGORY_NAMES.get(debug_name, debug_name)] = {"hosts": []}
+            current_category = None
+        elif current_category is not None:
+            categories[current_category]["hosts"].append(line)
+
+    for category in categories.values():
+        hosts = category.pop("hosts")
+        total = len(hosts)
+        category["total_hosts"] = total
+        category["returned_hosts"] = min(total, max_hosts)
+        category["truncated"] = total > max_hosts
+        category["hosts"] = hosts[:max_hosts]
+
+    return {
+        "command": _command_str(result),
+        "categories": categories,
+        "prompt_interrupted": prompt_interrupted,
         "stderr_summary": result.stderr.strip()[-2000:] if result.stderr else "",
     }
 
