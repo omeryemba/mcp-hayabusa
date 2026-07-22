@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "hayabusa": {
+      "command": "mcp-hayabusa"
+    }
+  }
+}
