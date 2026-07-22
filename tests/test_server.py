@@ -8,6 +8,8 @@ EXPECTED_TOOL_NAMES = {
     "hayabusa_update_rules",
     "hayabusa_csv_timeline",
     "hayabusa_json_timeline",
+    "hayabusa_eid_metrics",
+    "hayabusa_logon_summary",
     "hayabusa_search",
 }
 
@@ -62,6 +64,61 @@ def test_call_tool_csv_timeline_passes_kwargs(monkeypatch):
         "rules_dir": "/rules",
         "max_rows": 50,
     }
+
+
+def test_call_tool_eid_metrics_passes_kwargs(monkeypatch):
+    captured = {}
+
+    def fake_eid_metrics(target, **kwargs):
+        captured["target"] = target
+        captured["kwargs"] = kwargs
+        return {
+            "command": "hayabusa eid-metrics",
+            "total_rows": 0,
+            "returned_rows": 0,
+            "truncated": False,
+            "rows": [],
+            "stderr_summary": "",
+        }
+
+    monkeypatch.setattr(hayabusa, "eid_metrics", fake_eid_metrics)
+
+    asyncio.run(
+        server.mcp.call_tool(
+            "hayabusa_eid_metrics",
+            {"target": "/some/path.evtx", "max_rows": 50},
+        )
+    )
+
+    assert captured["target"] == "/some/path.evtx"
+    assert captured["kwargs"] == {"max_rows": 50}
+
+
+def test_call_tool_logon_summary_passes_kwargs(monkeypatch):
+    captured = {}
+
+    def fake_logon_summary(target, **kwargs):
+        captured["target"] = target
+        captured["kwargs"] = kwargs
+        empty = {"total_rows": 0, "returned_rows": 0, "truncated": False, "rows": []}
+        return {
+            "command": "hayabusa logon-summary",
+            "successful": empty,
+            "failed": empty,
+            "stderr_summary": "",
+        }
+
+    monkeypatch.setattr(hayabusa, "logon_summary", fake_logon_summary)
+
+    asyncio.run(
+        server.mcp.call_tool(
+            "hayabusa_logon_summary",
+            {"target": "/some/path.evtx", "max_rows": 50},
+        )
+    )
+
+    assert captured["target"] == "/some/path.evtx"
+    assert captured["kwargs"] == {"max_rows": 50}
 
 
 def test_call_tool_search_passes_kwargs(monkeypatch):

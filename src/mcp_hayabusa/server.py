@@ -89,6 +89,31 @@ def hayabusa_json_timeline(
 
 
 @mcp.tool()
+def hayabusa_eid_metrics(target: str, max_rows: int = 200) -> dict:
+    """Count event occurrences by Event ID across .evtx file(s).
+
+    Args:
+        target: Path to an .evtx file or a directory containing .evtx files.
+        max_rows: Maximum number of result rows to return (default 200).
+    """
+    return hayabusa.eid_metrics(target, max_rows=max_rows)
+
+
+@mcp.tool()
+def hayabusa_logon_summary(target: str, max_rows: int = 200) -> dict:
+    """Summarize successful and failed logon events across .evtx file(s).
+
+    Returns two bounded result sets, "successful" and "failed", each with
+    its own total_rows/returned_rows/truncated/rows.
+
+    Args:
+        target: Path to an .evtx file or a directory containing .evtx files.
+        max_rows: Maximum number of rows to return per result set (default 200).
+    """
+    return hayabusa.logon_summary(target, max_rows=max_rows)
+
+
+@mcp.tool()
 def hayabusa_search(
     target: str,
     keywords: list[str],
