@@ -14,6 +14,45 @@ class FakeResult:
         self.command = command or []
 
 
+def test_run_passes_stdin_devnull(monkeypatch):
+    import subprocess
+
+    captured = {}
+
+    def fake_subprocess_run(command, **kwargs):
+        captured["kwargs"] = kwargs
+
+        class Proc:
+            returncode = 0
+            stdout = ""
+            stderr = ""
+
+        return Proc()
+
+    monkeypatch.setattr(hayabusa, "resolve_hayabusa_binary", lambda: "hayabusa")
+    monkeypatch.setattr(subprocess, "run", fake_subprocess_run)
+
+    hayabusa._run(["help"])
+
+    assert captured["kwargs"]["stdin"] == subprocess.DEVNULL
+
+
+def test_run_returns_partial_output_on_timeout(monkeypatch):
+    import subprocess
+
+    def fake_subprocess_run(command, **kwargs):
+        raise subprocess.TimeoutExpired(cmd=command, timeout=kwargs["timeout"], output="partial out", stderr="partial err")
+
+    monkeypatch.setattr(hayabusa, "resolve_hayabusa_binary", lambda: "hayabusa")
+    monkeypatch.setattr(subprocess, "run", fake_subprocess_run)
+
+    result = hayabusa._run(["config-critical-systems"], timeout_sec=5)
+
+    assert result.returncode == hayabusa.TIMEOUT_RETURNCODE
+    assert result.stdout == "partial out"
+    assert result.stderr == "partial err"
+
+
 def test_version(monkeypatch):
     help_output = (
         "Hayabusa v3.10.0 - Independence Day Release\n"
@@ -319,6 +358,106 @@ def test_pivot_keywords_list_no_files_returns_empty(tmp_path, monkeypatch):
     result = hayabusa.pivot_keywords_list(str(tmp_path))
 
     assert result["categories"] == {}
+
+
+def test_config_critical_systems_parses_none_found(tmp_path, monkeypatch):
+    output = (
+        "Some explanation text.\n\n"
+        "Start time: 2026/01/01 00:00\n"
+        "Total event log files: 1\n\n"
+        "No DomainController found.\n\n"
+        "No FileServer found.\n"
+    )
+
+    monkeypatch.setattr(
+        hayabusa, "_run", lambda args, timeout_sec=600: FakeResult(returncode=0, stdout=output)
+    )
+    monkeypatch.setattr(hayabusa, "_require_existing_path", lambda p, label="target": tmp_path)
+
+    result = hayabusa.config_critical_systems(str(tmp_path))
+
+    assert result["prompt_interrupted"] is False
+    assert result["categories"]["Domain Controllers"]["total_hosts"] == 0
+    assert result["categories"]["Domain Controllers"]["hosts"] == []
+    assert result["categories"]["File Servers"]["total_hosts"] == 0
+
+
+def test_config_critical_systems_parses_found_and_truncates(tmp_path, monkeypatch):
+    output = (
+        "Some explanation text.\n\n"
+        "Start time: 2026/01/01 00:00\n\n"
+        "Domain Controllers found (2):\n"
+        "DC1.contoso.local\n"
+        "DC2.contoso.local\n\n"
+        "No FileServer found.\n"
+    )
+
+    monkeypatch.setattr(
+        hayabusa, "_run", lambda args, timeout_sec=600: FakeResult(returncode=0, stdout=output)
+    )
+    monkeypatch.setattr(hayabusa, "_require_existing_path", lambda p, label="target": tmp_path)
+
+    result = hayabusa.config_critical_systems(str(tmp_path), max_hosts=1)
+
+    assert result["prompt_interrupted"] is False
+    dc = result["categories"]["Domain Controllers"]
+    assert dc["total_hosts"] == 2
+    assert dc["returned_hosts"] == 1
+    assert dc["truncated"] is True
+    assert dc["hosts"] == ["DC1.contoso.local"]
+    assert result["categories"]["File Servers"]["total_hosts"] == 0
+
+
+def test_config_critical_systems_timeout_returns_partial_results(tmp_path, monkeypatch):
+    # Simulates hayabusa hanging on its interactive confirm prompt after
+    # printing the Domain Controllers section but before reaching File
+    # Servers -- _run surfaces this as TIMEOUT_RETURNCODE with partial stdout.
+    output = (
+        "Some explanation text.\n\n"
+        "Domain Controllers found (1):\n"
+        "DC1.contoso.local\n\n"
+    )
+
+    monkeypatch.setattr(
+        hayabusa,
+        "_run",
+        lambda args, timeout_sec=600: FakeResult(
+            returncode=hayabusa.TIMEOUT_RETURNCODE, stdout=output
+        ),
+    )
+    monkeypatch.setattr(hayabusa, "_require_existing_path", lambda p, label="target": tmp_path)
+
+    result = hayabusa.config_critical_systems(str(tmp_path))
+
+    assert result["prompt_interrupted"] is True
+    assert result["categories"]["Domain Controllers"]["hosts"] == ["DC1.contoso.local"]
+    assert "File Servers" not in result["categories"]
+
+
+def test_config_critical_systems_strips_ansi_codes(tmp_path, monkeypatch):
+    output = "\x1b[0mNo DomainController found.\n\n\x1b[0mNo FileServer found.\n"
+
+    monkeypatch.setattr(
+        hayabusa, "_run", lambda args, timeout_sec=600: FakeResult(returncode=0, stdout=output)
+    )
+    monkeypatch.setattr(hayabusa, "_require_existing_path", lambda p, label="target": tmp_path)
+
+    result = hayabusa.config_critical_systems(str(tmp_path))
+
+    assert result["categories"]["Domain Controllers"]["total_hosts"] == 0
+    assert result["categories"]["File Servers"]["total_hosts"] == 0
+
+
+def test_config_critical_systems_failure_raises(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        hayabusa,
+        "_run",
+        lambda args, timeout_sec=600: FakeResult(returncode=2, stdout="", stderr="boom"),
+    )
+    monkeypatch.setattr(hayabusa, "_require_existing_path", lambda p, label="target": tmp_path)
+
+    with pytest.raises(RuntimeError):
+        hayabusa.config_critical_systems(str(tmp_path))
 
 
 def test_search_requires_keywords(tmp_path, monkeypatch):

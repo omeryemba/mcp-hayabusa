@@ -14,6 +14,7 @@ EXPECTED_TOOL_NAMES = {
     "hayabusa_computer_metrics",
     "hayabusa_logon_summary",
     "hayabusa_pivot_keywords_list",
+    "hayabusa_config_critical_systems",
     "hayabusa_search",
 }
 
@@ -232,6 +233,32 @@ def test_call_tool_pivot_keywords_list_passes_kwargs(monkeypatch):
 
     assert captured["target"] == "/some/path.evtx"
     assert captured["kwargs"] == {"min_level": "high", "max_keywords": 50}
+
+
+def test_call_tool_config_critical_systems_passes_kwargs(monkeypatch):
+    captured = {}
+
+    def fake_config_critical_systems(target, **kwargs):
+        captured["target"] = target
+        captured["kwargs"] = kwargs
+        return {
+            "command": "hayabusa config-critical-systems",
+            "categories": {},
+            "prompt_interrupted": False,
+            "stderr_summary": "",
+        }
+
+    monkeypatch.setattr(hayabusa, "config_critical_systems", fake_config_critical_systems)
+
+    asyncio.run(
+        server.mcp.call_tool(
+            "hayabusa_config_critical_systems",
+            {"target": "/some/path.evtx", "max_hosts": 50},
+        )
+    )
+
+    assert captured["target"] == "/some/path.evtx"
+    assert captured["kwargs"] == {"max_hosts": 50}
 
 
 def test_call_tool_search_passes_kwargs(monkeypatch):
