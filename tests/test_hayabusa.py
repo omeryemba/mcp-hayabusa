@@ -677,3 +677,79 @@ def test_search_missing_output_returns_empty(tmp_path, monkeypatch):
     assert result["returned_rows"] == 0
     assert result["rows"] == []
     assert result["truncated"] is False
+
+
+def test_scan_evtx_composes_existing_wrappers(tmp_path, monkeypatch):
+    # scan_evtx must not shell out itself -- it should only call the
+    # existing hayabusa.py wrapper functions. Monkeypatch those directly
+    # (not _run) so a call to _run here would mean scan_evtx bypassed them.
+    captured = {}
+
+    def fake_log_metrics(target, **kwargs):
+        captured["log_metrics"] = (target, kwargs)
+        return {
+            "command": "hayabusa log-metrics",
+            "total_rows": 3,
+            "returned_rows": 3,
+            "truncated": False,
+            "rows": [{"Filename": "a.evtx"}],
+            "stderr_summary": "",
+        }
+
+    def fake_csv_timeline(target, **kwargs):
+        captured["csv_timeline"] = (target, kwargs)
+        return {
+            "command": "hayabusa csv-timeline",
+            "total_rows": 10,
+            "returned_rows": 2,
+            "truncated": True,
+            "rows": [{"RuleTitle": "Rule 0"}],
+            "stderr_summary": "",
+        }
+
+    def fake_eid_metrics(target, **kwargs):
+        captured["eid_metrics"] = (target, kwargs)
+        return {
+            "command": "hayabusa eid-metrics",
+            "total_rows": 7,
+            "returned_rows": 7,
+            "truncated": False,
+            "rows": [{"EventID": "4624"}],
+            "stderr_summary": "",
+        }
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("_run must not be called directly by scan_evtx")
+
+    monkeypatch.setattr(hayabusa, "log_metrics", fake_log_metrics)
+    monkeypatch.setattr(hayabusa, "csv_timeline", fake_csv_timeline)
+    monkeypatch.setattr(hayabusa, "eid_metrics", fake_eid_metrics)
+    monkeypatch.setattr(hayabusa, "_run", fail_if_called)
+    monkeypatch.setattr(hayabusa, "_require_existing_path", lambda p, label="target": tmp_path)
+
+    result = hayabusa.scan_evtx(str(tmp_path), min_level="high", max_rows=50)
+
+    assert result["target"] == str(tmp_path)
+    assert result["min_level"] == "high"
+    assert result["log_metrics"]["rows"] == [{"Filename": "a.evtx"}]
+    assert result["detections"]["rows"] == [{"RuleTitle": "Rule 0"}]
+    assert result["eid_metrics"]["rows"] == [{"EventID": "4624"}]
+    assert result["summary"] == {
+        "log_files_scanned": 3,
+        "total_detections": 10,
+        "detections_truncated": True,
+        "distinct_event_ids": 7,
+    }
+
+    # min_level and max_rows must reach csv_timeline; the other two calls
+    # only care about max_rows.
+    assert captured["csv_timeline"][1]["min_level"] == "high"
+    assert captured["csv_timeline"][1]["max_rows"] == 50
+    assert captured["log_metrics"][1]["max_rows"] == 50
+    assert captured["eid_metrics"][1]["max_rows"] == 50
+
+
+def test_scan_evtx_target_must_exist(tmp_path):
+    missing = tmp_path / "does-not-exist.evtx"
+    with pytest.raises(FileNotFoundError):
+        hayabusa.scan_evtx(str(missing))

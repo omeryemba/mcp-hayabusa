@@ -212,6 +212,28 @@ def hayabusa_search(
     return hayabusa.search(target, keywords, regex=regex, max_rows=max_rows)
 
 
+@mcp.tool()
+def scan_evtx(
+    target: str,
+    min_level: str | None = None,
+    max_rows: int = 200,
+) -> dict:
+    """Run a high-level first-pass scan of an .evtx file or directory.
+
+    A convenience tool that combines hayabusa_log_metrics,
+    hayabusa_csv_timeline (filtered by min_level), and hayabusa_eid_metrics
+    into one call, plus a compact "summary" section, so a first look at a
+    target doesn't require several separate tool calls.
+
+    Args:
+        target: Path to an .evtx file or a directory containing .evtx files.
+        min_level: Optional minimum alert level for the detection timeline,
+            e.g. "informational", "low", "medium", "high", or "critical".
+        max_rows: Maximum number of rows to return per sub-result (default 200).
+    """
+    return hayabusa.scan_evtx(target, min_level=min_level, max_rows=max_rows)
+
+
 def main() -> None:
     mcp.run()
 

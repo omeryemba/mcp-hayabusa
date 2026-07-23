@@ -16,6 +16,7 @@ EXPECTED_TOOL_NAMES = {
     "hayabusa_pivot_keywords_list",
     "hayabusa_config_critical_systems",
     "hayabusa_search",
+    "scan_evtx",
 }
 
 
@@ -294,3 +295,31 @@ def test_call_tool_search_passes_kwargs(monkeypatch):
     assert captured["target"] == "/some/path.evtx"
     assert captured["keywords"] == ["needle", "haystack"]
     assert captured["kwargs"] == {"regex": True, "max_rows": 25}
+
+
+def test_call_tool_scan_evtx_passes_kwargs(monkeypatch):
+    captured = {}
+
+    def fake_scan_evtx(target, **kwargs):
+        captured["target"] = target
+        captured["kwargs"] = kwargs
+        return {
+            "target": target,
+            "min_level": kwargs.get("min_level"),
+            "log_metrics": {},
+            "detections": {},
+            "eid_metrics": {},
+            "summary": {},
+        }
+
+    monkeypatch.setattr(hayabusa, "scan_evtx", fake_scan_evtx)
+
+    asyncio.run(
+        server.mcp.call_tool(
+            "scan_evtx",
+            {"target": "/some/path.evtx", "min_level": "high", "max_rows": 50},
+        )
+    )
+
+    assert captured["target"] == "/some/path.evtx"
+    assert captured["kwargs"] == {"min_level": "high", "max_rows": 50}
