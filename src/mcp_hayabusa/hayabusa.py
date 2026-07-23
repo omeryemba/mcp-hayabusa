@@ -615,10 +615,16 @@ def search(
     }
 
 
+SCAN_EVTX_OUTPUT_FORMATS = ("summary", "full")
+
+
 def scan_evtx(
     target: str,
     *,
     min_level: str | None = None,
+    rule_filter: str | None = None,
+    output_format: str = "summary",
+    max_results: int | None = None,
     max_rows: int = MAX_ROWS_RETURNED,
     timeout_sec: int = DEFAULT_TIMEOUT_SEC,
 ) -> dict:
@@ -628,6 +634,19 @@ def scan_evtx(
     # by min_level, and event ID metrics, plus a compact "summary" so a
     # model doesn't have to dig through three sub-results just to see
     # whether anything was found.
+    #
+    # rule_filter and max_results narrow the *detections* specifically:
+    # hayabusa's csv-timeline has no native keyword filter on rule name, so
+    # rule_filter is applied here as a case-insensitive substring match
+    # against each detection row's "RuleTitle" -- but only within the
+    # max_rows-bounded pool csv_timeline already fetched. With a large,
+    # truncated detection set, matches beyond that pool won't be found;
+    # raise max_rows if that matters more than response size.
+    if output_format not in SCAN_EVTX_OUTPUT_FORMATS:
+        raise ValueError(
+            f"output_format must be one of {SCAN_EVTX_OUTPUT_FORMATS}, got {output_format!r}"
+        )
+
     target_path = _require_existing_path(target)
 
     log_info = log_metrics(target, max_rows=max_rows, timeout_sec=timeout_sec)
@@ -636,16 +655,52 @@ def scan_evtx(
     )
     eid_info = eid_metrics(target, max_rows=max_rows, timeout_sec=timeout_sec)
 
+    rows = detections["rows"]
+    if rule_filter:
+        needle = rule_filter.lower()
+        filtered_rows = [r for r in rows if needle in str(r.get("RuleTitle", "")).lower()]
+    else:
+        filtered_rows = rows
+
+    effective_max_results = max_results if max_results is not None else len(filtered_rows)
+    limited_rows = filtered_rows[:effective_max_results]
+
+    # Only the true (unfiltered) hayabusa total is known when no rule_filter
+    # is applied; with one, "matched" can only reflect the fetched pool.
+    matched_detections = detections["total_rows"] if rule_filter is None else len(filtered_rows)
+
+    summary_stats = {
+        "log_files_scanned": log_info["total_rows"],
+        "total_detections": detections["total_rows"],
+        "matched_detections": matched_detections,
+        "detections_truncated": detections["truncated"],
+        "distinct_event_ids": eid_info["total_rows"],
+    }
+
+    if output_format == "full":
+        detections_out = dict(detections)
+        if rule_filter is not None or max_results is not None:
+            detections_out["rows"] = limited_rows
+            detections_out["returned_rows"] = len(limited_rows)
+            if rule_filter is not None:
+                detections_out["rule_filter_matches"] = len(filtered_rows)
+
+        return {
+            "target": str(target_path),
+            "min_level": min_level,
+            "rule_filter": rule_filter,
+            "output_format": output_format,
+            "log_metrics": log_info,
+            "detections": detections_out,
+            "eid_metrics": eid_info,
+            "summary": summary_stats,
+        }
+
     return {
         "target": str(target_path),
         "min_level": min_level,
-        "log_metrics": log_info,
-        "detections": detections,
-        "eid_metrics": eid_info,
-        "summary": {
-            "log_files_scanned": log_info["total_rows"],
-            "total_detections": detections["total_rows"],
-            "detections_truncated": detections["truncated"],
-            "distinct_event_ids": eid_info["total_rows"],
-        },
+        "rule_filter": rule_filter,
+        "output_format": output_format,
+        "summary": summary_stats,
+        "top_findings": limited_rows,
     }

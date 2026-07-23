@@ -216,6 +216,9 @@ def hayabusa_search(
 def scan_evtx(
     target: str,
     min_level: str | None = None,
+    rule_filter: str | None = None,
+    output_format: str = "summary",
+    max_results: int | None = None,
     max_rows: int = 200,
 ) -> dict:
     """Run a high-level first-pass scan of an .evtx file or directory.
@@ -229,9 +232,30 @@ def scan_evtx(
         target: Path to an .evtx file or a directory containing .evtx files.
         min_level: Optional minimum alert level for the detection timeline,
             e.g. "informational", "low", "medium", "high", or "critical".
-        max_rows: Maximum number of rows to return per sub-result (default 200).
+        rule_filter: Optional keyword to filter detections by. Only
+            detections whose rule title contains this keyword
+            (case-insensitive) are included. Matching only considers
+            detections already fetched within max_rows -- raise max_rows if
+            a large, truncated result set might hide matches.
+        output_format: "summary" (default) returns a concise result --
+            aggregate counts plus a bounded "top_findings" list -- suited
+            for reasoning over. "full" returns the complete result: file
+            metadata, the full detection timeline, event ID metrics, and
+            the summary, all still subject to rule_filter/max_results.
+        max_results: Optional maximum number of detections ("findings") to
+            return, applied after rule_filter. Defaults to max_rows,
+            preserving prior behavior when omitted.
+        max_rows: Maximum number of rows to fetch per sub-result (default
+            200). Also bounds how many detections rule_filter can search.
     """
-    return hayabusa.scan_evtx(target, min_level=min_level, max_rows=max_rows)
+    return hayabusa.scan_evtx(
+        target,
+        min_level=min_level,
+        rule_filter=rule_filter,
+        output_format=output_format,
+        max_results=max_results,
+        max_rows=max_rows,
+    )
 
 
 def main() -> None:
