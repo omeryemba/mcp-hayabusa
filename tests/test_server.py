@@ -1,5 +1,8 @@
 import asyncio
 
+import pytest
+from mcp.server.fastmcp.exceptions import ToolError
+
 from mcp_hayabusa import hayabusa, server
 
 EXPECTED_TOOL_NAMES = {
@@ -17,6 +20,7 @@ EXPECTED_TOOL_NAMES = {
     "hayabusa_config_critical_systems",
     "hayabusa_search",
     "scan_evtx",
+    "get_hayabusa_rules",
 }
 
 
@@ -369,3 +373,66 @@ def test_call_tool_scan_evtx_passes_rule_filter_and_output_format(monkeypatch):
         "max_results": 5,
         "max_rows": 200,
     }
+
+
+def test_call_tool_get_hayabusa_rules_lists_rules(monkeypatch):
+    def fake_get_hayabusa_rules(**kwargs):
+        return {
+            "rules_dir": "/rules",
+            "keyword": None,
+            "rule_files_scanned": 2,
+            "parse_errors": 0,
+            "total_rules": 2,
+            "returned_rules": 2,
+            "truncated": False,
+            "rules": [{"title": "Rule A"}, {"title": "Rule B"}],
+        }
+
+    monkeypatch.setattr(hayabusa, "get_hayabusa_rules", fake_get_hayabusa_rules)
+
+    result = asyncio.run(server.mcp.call_tool("get_hayabusa_rules", {}))
+
+    assert "Rule A" in str(result)
+    assert "Rule B" in str(result)
+
+
+def test_call_tool_get_hayabusa_rules_passes_keyword_filter(monkeypatch):
+    captured = {}
+
+    def fake_get_hayabusa_rules(**kwargs):
+        captured["kwargs"] = kwargs
+        return {
+            "rules_dir": "/rules",
+            "keyword": kwargs.get("keyword"),
+            "rule_files_scanned": 1,
+            "parse_errors": 0,
+            "total_rules": 1,
+            "returned_rules": 1,
+            "truncated": False,
+            "rules": [{"title": "Mimikatz Credential Dumping"}],
+        }
+
+    monkeypatch.setattr(hayabusa, "get_hayabusa_rules", fake_get_hayabusa_rules)
+
+    asyncio.run(
+        server.mcp.call_tool(
+            "get_hayabusa_rules",
+            {"keyword": "mimikatz", "rules_dir": "/custom/rules", "max_rules": 10},
+        )
+    )
+
+    assert captured["kwargs"] == {
+        "keyword": "mimikatz",
+        "rules_dir": "/custom/rules",
+        "max_rules": 10,
+    }
+
+
+def test_call_tool_get_hayabusa_rules_error_propagates(monkeypatch):
+    def fake_get_hayabusa_rules(**kwargs):
+        raise FileNotFoundError("rules_dir does not exist: /nope")
+
+    monkeypatch.setattr(hayabusa, "get_hayabusa_rules", fake_get_hayabusa_rules)
+
+    with pytest.raises(ToolError):
+        asyncio.run(server.mcp.call_tool("get_hayabusa_rules", {"rules_dir": "/nope"}))

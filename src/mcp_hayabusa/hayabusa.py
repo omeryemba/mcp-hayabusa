@@ -18,6 +18,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
+import yaml
+
 from .config import resolve_hayabusa_binary
 
 DEFAULT_TIMEOUT_SEC = 600
@@ -108,6 +110,85 @@ def update_rules(timeout_sec: int = 300) -> str:
     if result.returncode not in (0, 1):
         raise RuntimeError(f"hayabusa update-rules failed: {result.stderr}")
     return output
+
+
+def _default_rules_dir() -> Path:
+    return Path(resolve_hayabusa_binary()).resolve().parent / "rules"
+
+
+def get_hayabusa_rules(
+    *,
+    keyword: str | None = None,
+    rules_dir: str | None = None,
+    max_rules: int = MAX_ROWS_RETURNED,
+) -> dict:
+    # Unlike every other function here, this doesn't shell out to hayabusa
+    # at all: hayabusa has no subcommand that lists its full rule catalog
+    # (only rules that actually fired during a scan show up in results), so
+    # the only way to enumerate what's *available* is to read the Sigma
+    # rule YAML files directly from hayabusa's local rules directory.
+    if rules_dir:
+        rules_path = _require_existing_path(rules_dir, label="rules_dir")
+    else:
+        rules_path = _require_existing_path(str(_default_rules_dir()), label="rules_dir")
+    if not rules_path.is_dir():
+        raise NotADirectoryError(f"rules_dir is not a directory: {rules_path}")
+
+    rule_files = sorted(
+        p for p in rules_path.rglob("*") if p.is_file() and p.suffix.lower() in (".yml", ".yaml")
+    )
+
+    keyword_lower = keyword.lower() if keyword else None
+    matched: list[dict] = []
+    matched_count = 0
+    parse_errors = 0
+
+    for rule_file in rule_files:
+        try:
+            with rule_file.open(encoding="utf-8") as f:
+                data = yaml.safe_load(f)
+        except yaml.YAMLError:
+            parse_errors += 1
+            continue
+        if not isinstance(data, dict):
+            parse_errors += 1
+            continue
+
+        title = data.get("title") or ""
+        description = data.get("description") or ""
+        tags = data.get("tags") or []
+        if not isinstance(tags, list):
+            tags = [tags]
+
+        if keyword_lower:
+            haystack = " ".join([str(title), str(description), *(str(t) for t in tags)]).lower()
+            if keyword_lower not in haystack:
+                continue
+
+        matched_count += 1
+        if len(matched) < max_rules:
+            matched.append(
+                {
+                    "id": data.get("id"),
+                    "title": title,
+                    "level": data.get("level"),
+                    "status": data.get("status"),
+                    "tags": tags,
+                    "description": description,
+                    "path": str(rule_file.relative_to(rules_path)),
+                }
+            )
+
+    return {
+        "rules_dir": str(rules_path),
+        "keyword": keyword,
+        "rule_files_scanned": len(rule_files),
+        "parse_errors": parse_errors,
+        "total_rules": matched_count,
+        "returned_rules": len(matched),
+        "truncated": matched_count > len(matched),
+        "rules": matched,
+    }
 
 
 def csv_timeline(

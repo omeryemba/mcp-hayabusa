@@ -36,6 +36,30 @@ def hayabusa_update_rules() -> str:
 
 
 @mcp.tool()
+def get_hayabusa_rules(
+    keyword: str | None = None,
+    rules_dir: str | None = None,
+    max_rules: int = 200,
+) -> dict:
+    """List available Hayabusa detection rules (the installed rule catalog).
+
+    Unlike other tools here, this reads the Sigma rule YAML files directly
+    from hayabusa's local rules directory instead of shelling out to
+    hayabusa -- hayabusa has no subcommand that lists its full rule
+    catalog, only rules that actually fired during a scan.
+
+    Args:
+        keyword: Optional keyword to filter rules by (case-insensitive
+            substring match against each rule's title, description, and
+            tags). If omitted, all rules are considered.
+        rules_dir: Optional path to a rules directory. Defaults to the
+            "rules" directory next to the resolved hayabusa binary.
+        max_rules: Maximum number of matching rules to return (default 200).
+    """
+    return hayabusa.get_hayabusa_rules(keyword=keyword, rules_dir=rules_dir, max_rules=max_rules)
+
+
+@mcp.tool()
 def hayabusa_csv_timeline(
     target: str,
     profile: str | None = None,

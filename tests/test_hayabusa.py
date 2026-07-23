@@ -839,3 +839,128 @@ def test_scan_evtx_target_must_exist(tmp_path):
     missing = tmp_path / "does-not-exist.evtx"
     with pytest.raises(FileNotFoundError):
         hayabusa.scan_evtx(str(missing))
+
+
+def _write_rule(path, *, title, level="informational", status="stable", tags=None, description=""):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tags_yaml = "\n".join(f"    - {t}" for t in (tags or []))
+    path.write_text(
+        f"""\
+title: '{title}'
+id: {path.stem}
+level: {level}
+status: {status}
+description: '{description}'
+tags:
+{tags_yaml if tags_yaml else ""}
+""",
+        encoding="utf-8",
+    )
+
+
+def test_get_hayabusa_rules_lists_all_rules(tmp_path):
+    _write_rule(tmp_path / "a.yml", title="Suspicious PowerShell Download")
+    _write_rule(tmp_path / "sub" / "b.yml", title="Mimikatz Credential Dumping")
+
+    result = hayabusa.get_hayabusa_rules(rules_dir=str(tmp_path))
+
+    assert result["rules_dir"] == str(tmp_path)
+    assert result["keyword"] is None
+    assert result["rule_files_scanned"] == 2
+    assert result["total_rules"] == 2
+    assert result["returned_rules"] == 2
+    assert result["truncated"] is False
+    titles = {r["title"] for r in result["rules"]}
+    assert titles == {"Suspicious PowerShell Download", "Mimikatz Credential Dumping"}
+
+
+def test_get_hayabusa_rules_keyword_filters_case_insensitively(tmp_path):
+    _write_rule(tmp_path / "a.yml", title="Suspicious PowerShell Download")
+    _write_rule(tmp_path / "b.yml", title="Mimikatz Credential Dumping")
+    _write_rule(
+        tmp_path / "c.yml", title="Encoded Command", description="Detects powershell -enc usage"
+    )
+
+    result = hayabusa.get_hayabusa_rules(rules_dir=str(tmp_path), keyword="POWERSHELL")
+
+    assert result["total_rules"] == 2
+    titles = {r["title"] for r in result["rules"]}
+    assert titles == {"Suspicious PowerShell Download", "Encoded Command"}
+
+
+def test_get_hayabusa_rules_keyword_matches_tags(tmp_path):
+    _write_rule(tmp_path / "a.yml", title="Rule A", tags=["attack.credential-access"])
+    _write_rule(tmp_path / "b.yml", title="Rule B", tags=["attack.execution"])
+
+    result = hayabusa.get_hayabusa_rules(rules_dir=str(tmp_path), keyword="credential-access")
+
+    assert result["total_rules"] == 1
+    assert result["rules"][0]["title"] == "Rule A"
+
+
+def test_get_hayabusa_rules_no_matches(tmp_path):
+    _write_rule(tmp_path / "a.yml", title="Rule A")
+
+    result = hayabusa.get_hayabusa_rules(rules_dir=str(tmp_path), keyword="nonexistent")
+
+    assert result["total_rules"] == 0
+    assert result["rules"] == []
+    assert result["truncated"] is False
+
+
+def test_get_hayabusa_rules_truncates_with_max_rules(tmp_path):
+    for i in range(5):
+        _write_rule(tmp_path / f"rule{i}.yml", title=f"Rule {i}")
+
+    result = hayabusa.get_hayabusa_rules(rules_dir=str(tmp_path), max_rules=2)
+
+    assert result["total_rules"] == 5
+    assert result["returned_rules"] == 2
+    assert result["truncated"] is True
+    assert len(result["rules"]) == 2
+
+
+def test_get_hayabusa_rules_skips_unparseable_files(tmp_path):
+    _write_rule(tmp_path / "good.yml", title="Good Rule")
+    bad = tmp_path / "bad.yml"
+    bad.write_text("title: [unterminated\n  - broken", encoding="utf-8")
+    not_a_rule = tmp_path / "list.yml"
+    not_a_rule.write_text("- just\n- a\n- list\n", encoding="utf-8")
+
+    result = hayabusa.get_hayabusa_rules(rules_dir=str(tmp_path))
+
+    assert result["rule_files_scanned"] == 3
+    assert result["parse_errors"] == 2
+    assert result["total_rules"] == 1
+    assert result["rules"][0]["title"] == "Good Rule"
+
+
+def test_get_hayabusa_rules_missing_rules_dir_raises(tmp_path):
+    missing = tmp_path / "does-not-exist"
+    with pytest.raises(FileNotFoundError):
+        hayabusa.get_hayabusa_rules(rules_dir=str(missing))
+
+
+def test_get_hayabusa_rules_rules_dir_not_a_directory_raises(tmp_path):
+    not_a_dir = tmp_path / "file.txt"
+    not_a_dir.write_text("hello", encoding="utf-8")
+
+    with pytest.raises(NotADirectoryError):
+        hayabusa.get_hayabusa_rules(rules_dir=str(not_a_dir))
+
+
+def test_get_hayabusa_rules_default_rules_dir_next_to_binary(tmp_path, monkeypatch):
+    fake_binary_dir = tmp_path / "hayabusa_install"
+    rules_dir = fake_binary_dir / "rules"
+    _write_rule(rules_dir / "a.yml", title="Rule A")
+
+    fake_binary = fake_binary_dir / "hayabusa.exe"
+    fake_binary_dir.mkdir(parents=True, exist_ok=True)
+    fake_binary.write_text("", encoding="utf-8")
+
+    monkeypatch.setattr(hayabusa, "resolve_hayabusa_binary", lambda: str(fake_binary))
+
+    result = hayabusa.get_hayabusa_rules()
+
+    assert result["rules_dir"] == str(rules_dir)
+    assert result["total_rules"] == 1
