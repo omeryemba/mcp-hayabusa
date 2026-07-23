@@ -41,7 +41,9 @@ def test_run_returns_partial_output_on_timeout(monkeypatch):
     import subprocess
 
     def fake_subprocess_run(command, **kwargs):
-        raise subprocess.TimeoutExpired(cmd=command, timeout=kwargs["timeout"], output="partial out", stderr="partial err")
+        raise subprocess.TimeoutExpired(
+            cmd=command, timeout=kwargs["timeout"], output="partial out", stderr="partial err"
+        )
 
     monkeypatch.setattr(hayabusa, "resolve_hayabusa_binary", lambda: "hayabusa")
     monkeypatch.setattr(subprocess, "run", fake_subprocess_run)

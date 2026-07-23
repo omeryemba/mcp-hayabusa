@@ -16,6 +16,7 @@ import subprocess
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 from .config import resolve_hayabusa_binary
 
@@ -58,7 +59,11 @@ def _run(args: list[str], timeout_sec: int = DEFAULT_TIMEOUT_SEC) -> CommandResu
         # Surface whatever was captured before the kill instead of raising,
         # since a stuck interactive prompt is a meaningful outcome on its own
         # (see config_critical_systems), not just an execution failure.
-        return CommandResult(TIMEOUT_RETURNCODE, exc.stdout or "", exc.stderr or "", command)
+        # text=True above guarantees these are str at runtime; TimeoutExpired
+        # just isn't generic over that in typeshed.
+        timeout_stdout = cast(str, exc.stdout) if exc.stdout else ""
+        timeout_stderr = cast(str, exc.stderr) if exc.stderr else ""
+        return CommandResult(TIMEOUT_RETURNCODE, timeout_stdout, timeout_stderr, command)
     return CommandResult(proc.returncode, proc.stdout, proc.stderr, command)
 
 

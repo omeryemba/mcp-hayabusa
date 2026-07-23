@@ -13,6 +13,8 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
+    "ruff>=0.15.0",
+    "mypy>=1.10.0",
 ]
 
 [project.scripts]
@@ -27,3 +29,16 @@ packages = ["src/mcp_hayabusa"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 105
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.10"
+packages = ["mcp_hayabusa"]
+mypy_path = "src"
+warn_unused_ignores = true
+warn_redundant_casts = true
