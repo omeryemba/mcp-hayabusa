@@ -56,6 +56,7 @@ The server communicates over stdio, so it's meant to be launched by an MCP clien
 | `hayabusa_version` | Get the installed hayabusa binary's version. |
 | `hayabusa_list_profiles` | List available output profiles. |
 | `hayabusa_update_rules` | Update the Sigma detection rule set. |
+| `get_hayabusa_rules` | List available Hayabusa/Sigma detection rules from the local rules directory, with an optional keyword filter. |
 | `hayabusa_csv_timeline` | Run `csv-timeline` over an `.evtx` file or directory; returns bounded rows + total count. |
 | `hayabusa_json_timeline` | Run `json-timeline` over an `.evtx` file or directory; returns bounded JSON records + total count. |
 | `hayabusa_eid_metrics` | Count event occurrences by Event ID. |
