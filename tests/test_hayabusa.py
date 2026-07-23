@@ -474,6 +474,58 @@ def test_target_must_exist(tmp_path):
         hayabusa._require_existing_path(str(missing))
 
 
+def test_require_existing_path_accepts_real_existing_path(tmp_path):
+    real_file = tmp_path / "Security.evtx"
+    real_file.write_text("", encoding="utf-8")
+
+    result = hayabusa._require_existing_path(str(real_file))
+
+    assert result == real_file.resolve()
+
+
+def test_require_existing_path_rejects_empty_string():
+    with pytest.raises(ValueError):
+        hayabusa._require_existing_path("")
+
+
+def test_require_existing_path_rejects_whitespace_only():
+    with pytest.raises(ValueError):
+        hayabusa._require_existing_path("   ")
+
+
+def test_require_existing_path_rejects_null_byte(tmp_path):
+    real_file = tmp_path / "Security.evtx"
+    real_file.write_text("", encoding="utf-8")
+
+    with pytest.raises(ValueError):
+        hayabusa._require_existing_path(str(real_file) + "\x00.evtx")
+
+
+def test_require_existing_path_normalizes_dot_dot_to_real_location(tmp_path):
+    # A ".."-containing path is not special-cased or blocked -- it's only
+    # ever meaningful after normalization, same as any other path. Here it
+    # resolves to a real, legitimate location and should work exactly like
+    # the direct path would.
+    (tmp_path / "sub").mkdir()
+    real_file = tmp_path / "Security.evtx"
+    real_file.write_text("", encoding="utf-8")
+    traversal_style = str(tmp_path / "sub" / ".." / "Security.evtx")
+
+    result = hayabusa._require_existing_path(traversal_style)
+
+    assert result == real_file.resolve()
+
+
+def test_require_existing_path_dot_dot_to_nonexistent_still_rejected(tmp_path):
+    # Traversal syntax grants no special access: once normalized, a path to
+    # somewhere that doesn't exist is rejected exactly like any other
+    # nonexistent path.
+    traversal_style = str(tmp_path / "sub" / ".." / "does-not-exist.evtx")
+
+    with pytest.raises(FileNotFoundError):
+        hayabusa._require_existing_path(traversal_style)
+
+
 def test_version_failure(monkeypatch):
     monkeypatch.setattr(
         hayabusa, "_run", lambda args, timeout_sec=30: FakeResult(returncode=1)
@@ -599,7 +651,9 @@ def test_csv_timeline_optional_flags_passed(tmp_path, monkeypatch):
     args = captured["args"]
     assert args[args.index("-p") + 1] == "verbose"
     assert args[args.index("-m") + 1] == "high"
-    assert args[args.index("-r") + 1] == "/rules"
+    # rules_dir is validated via the (here monkeypatched) _require_existing_path
+    # too, so the resolved value is whatever that returns, not the raw input.
+    assert args[args.index("-r") + 1] == str(tmp_path)
 
 
 def test_json_timeline_optional_flags_passed(tmp_path, monkeypatch):
@@ -621,7 +675,42 @@ def test_json_timeline_optional_flags_passed(tmp_path, monkeypatch):
     args = captured["args"]
     assert args[args.index("-p") + 1] == "verbose"
     assert args[args.index("-m") + 1] == "high"
-    assert args[args.index("-r") + 1] == "/rules"
+    # rules_dir is validated via the (here monkeypatched) _require_existing_path
+    # too, so the resolved value is whatever that returns, not the raw input.
+    assert args[args.index("-r") + 1] == str(tmp_path)
+
+
+def test_csv_timeline_rules_dir_must_exist(tmp_path):
+    missing_rules_dir = tmp_path / "missing_rules"
+    with pytest.raises(FileNotFoundError):
+        hayabusa.csv_timeline(str(tmp_path), rules_dir=str(missing_rules_dir))
+
+
+def test_csv_timeline_rules_dir_accepts_single_rule_file(tmp_path, monkeypatch):
+    # hayabusa's -r accepts a rule directory or a single rule file.
+    rule_file = tmp_path / "custom_rule.yml"
+    rule_file.write_text("title: test\n", encoding="utf-8")
+    captured = {}
+
+    def fake_run(args, timeout_sec=600):
+        captured["args"] = args
+        output_path = Path(args[args.index("-o") + 1])
+        with output_path.open("w", newline="", encoding="utf-8") as f:
+            csv.writer(f).writerow(["Timestamp"])
+        return FakeResult(returncode=0, command=["hayabusa", *args])
+
+    monkeypatch.setattr(hayabusa, "_run", fake_run)
+
+    hayabusa.csv_timeline(str(tmp_path), rules_dir=str(rule_file))
+
+    args = captured["args"]
+    assert args[args.index("-r") + 1] == str(rule_file.resolve())
+
+
+def test_json_timeline_rules_dir_must_exist(tmp_path):
+    missing_rules_dir = tmp_path / "missing_rules"
+    with pytest.raises(FileNotFoundError):
+        hayabusa.json_timeline(str(tmp_path), rules_dir=str(missing_rules_dir))
 
 
 def test_search_returns_results(tmp_path, monkeypatch):

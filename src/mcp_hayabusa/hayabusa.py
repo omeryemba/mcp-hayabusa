@@ -70,6 +70,22 @@ def _run(args: list[str], timeout_sec: int = DEFAULT_TIMEOUT_SEC) -> CommandResu
 
 
 def _require_existing_path(path_str: str, label: str = "target") -> Path:
+    # No path is out of bounds here by design -- this server intentionally
+    # lets its (trusted) MCP caller point it at any .evtx/rules path readable
+    # by the OS account running it, the same way a local CLI would (see the
+    # "MCP trust boundary" note in CLAUDE.md). What's still worth guarding
+    # against is malformed input that isn't really a path at all: NUL bytes
+    # (can truncate/confuse OS and library path handling) and empty/
+    # whitespace-only strings. Relative segments like ".." are not rejected;
+    # .resolve() below normalizes them away, so a traversal-style string
+    # just resolves to a real location like any other path and is then
+    # subject to the same existence check as everything else -- it grants
+    # no special access.
+    if not path_str or not path_str.strip():
+        raise ValueError(f"{label} must be a non-empty path")
+    if "\x00" in path_str:
+        raise ValueError(f"{label} must not contain NUL bytes")
+
     path = Path(path_str).expanduser().resolve()
     if not path.exists():
         raise FileNotFoundError(f"{label} does not exist: {path}")
@@ -217,7 +233,9 @@ def csv_timeline(
         if min_level:
             args += ["-m", min_level]
         if rules_dir:
-            args += ["-r", rules_dir]
+            # hayabusa's -r accepts a rule directory or a single rule file,
+            # so only existence is required here, not is_dir().
+            args += ["-r", str(_require_existing_path(rules_dir, label="rules_dir"))]
 
         result = _run(args, timeout_sec=timeout_sec)
         if not output_path.exists():
@@ -271,7 +289,9 @@ def json_timeline(
         if min_level:
             args += ["-m", min_level]
         if rules_dir:
-            args += ["-r", rules_dir]
+            # hayabusa's -r accepts a rule directory or a single rule file,
+            # so only existence is required here, not is_dir().
+            args += ["-r", str(_require_existing_path(rules_dir, label="rules_dir"))]
 
         result = _run(args, timeout_sec=timeout_sec)
         if not output_path.exists():
