@@ -613,3 +613,39 @@ def search(
         "rows": rows,
         "stderr_summary": result.stderr.strip()[-2000:] if result.stderr else "",
     }
+
+
+def scan_evtx(
+    target: str,
+    *,
+    min_level: str | None = None,
+    max_rows: int = MAX_ROWS_RETURNED,
+    timeout_sec: int = DEFAULT_TIMEOUT_SEC,
+) -> dict:
+    # A high-level convenience scan for a first-pass look at a target,
+    # composed entirely from the wrapper functions above (no subprocess
+    # calls of its own): file-level metadata, a detection timeline filtered
+    # by min_level, and event ID metrics, plus a compact "summary" so a
+    # model doesn't have to dig through three sub-results just to see
+    # whether anything was found.
+    target_path = _require_existing_path(target)
+
+    log_info = log_metrics(target, max_rows=max_rows, timeout_sec=timeout_sec)
+    detections = csv_timeline(
+        target, min_level=min_level, max_rows=max_rows, timeout_sec=timeout_sec
+    )
+    eid_info = eid_metrics(target, max_rows=max_rows, timeout_sec=timeout_sec)
+
+    return {
+        "target": str(target_path),
+        "min_level": min_level,
+        "log_metrics": log_info,
+        "detections": detections,
+        "eid_metrics": eid_info,
+        "summary": {
+            "log_files_scanned": log_info["total_rows"],
+            "total_detections": detections["total_rows"],
+            "detections_truncated": detections["truncated"],
+            "distinct_event_ids": eid_info["total_rows"],
+        },
+    }

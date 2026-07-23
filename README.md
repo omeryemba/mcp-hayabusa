@@ -66,6 +66,7 @@ The server communicates over stdio, so it's meant to be launched by an MCP clien
 | `hayabusa_extract_base64` | Extract and decode base64-encoded strings from event fields. |
 | `hayabusa_config_critical_systems` | Detect likely domain controllers and file servers from the logs. |
 | `hayabusa_search` | Keyword/regex search over `.evtx` event records. |
+| `scan_evtx` | High-level first-pass scan: combines log metadata, a detection timeline (filtered by min level), and event ID metrics into one summary. |
 
 ## Tests
 
