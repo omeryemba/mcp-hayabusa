@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from mcp.server.fastmcp import FastMCP
 
-from . import hayabusa
+from . import hayabusa, knowledge
 
 mcp = FastMCP(
     "hayabusa",
@@ -280,6 +280,69 @@ def scan_evtx(
         max_results=max_results,
         max_rows=max_rows,
     )
+
+
+@mcp.resource(
+    "hayabusa://rules",
+    name="rule_catalog",
+    description=(
+        "Browsable index of the installed Sigma detection rule catalog, "
+        "grouped by category (e.g. sigma/builtin), with per-category rule "
+        "counts. For ad hoc keyword search across rules, use the "
+        "get_hayabusa_rules tool instead."
+    ),
+    mime_type="application/json",
+)
+def rule_catalog() -> dict:
+    return knowledge.rules_index()
+
+
+@mcp.resource(
+    "hayabusa://rules/{rule_id}",
+    name="rule_detail",
+    description="Full detail (tags, description, level, path) for a single rule by its Sigma id.",
+    mime_type="application/json",
+)
+def rule_detail(rule_id: str) -> dict:
+    return knowledge.get_rule(rule_id)
+
+
+@mcp.resource(
+    "hayabusa://attack/techniques",
+    name="attack_technique_coverage",
+    description=(
+        "ATT&CK technique ID -> detecting rules, derived from each rule's "
+        "tags (e.g. attack.t1059.001). Shows which techniques have "
+        "detection coverage and how many rules cover each."
+    ),
+    mime_type="application/json",
+)
+def attack_technique_coverage() -> dict:
+    return knowledge.list_attack_techniques()
+
+
+@mcp.resource(
+    "hayabusa://attack/techniques/{technique_id}",
+    name="attack_technique_detail",
+    description="Rules detecting a single ATT&CK technique ID (e.g. T1059.001).",
+    mime_type="application/json",
+)
+def attack_technique_detail(technique_id: str) -> dict:
+    return knowledge.get_attack_technique(technique_id)
+
+
+@mcp.resource(
+    "hayabusa://attack/tactics",
+    name="attack_tactic_coverage",
+    description=(
+        "ATT&CK tactic -> detecting rules, derived from each rule's tags "
+        "(e.g. attack.execution). Shows which tactics have detection "
+        "coverage and how many rules cover each."
+    ),
+    mime_type="application/json",
+)
+def attack_tactic_coverage() -> dict:
+    return knowledge.list_attack_tactics()
 
 
 def main() -> None:

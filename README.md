@@ -69,13 +69,25 @@ The server communicates over stdio, so it's meant to be launched by an MCP clien
 | `hayabusa_search` | Keyword/regex search over `.evtx` event records. |
 | `scan_evtx` | High-level first-pass scan: combines log metadata, a detection timeline (filtered by min level and an optional rule-title keyword filter), and event ID metrics. Returns a concise `summary`/`top_findings` result by default, or the full combined result with `output_format="full"`. |
 
+## Resources
+
+Unlike the tools above (which run analysis against `.evtx` files you point them at), these are read-only MCP resources for browsing the *installed detection rule set itself* — no `.evtx` file required. ATT&CK technique/tactic data is derived entirely from each Sigma rule's own `tags:` field (e.g. `attack.t1059.001`, `attack.execution`), not a bundled MITRE dataset, so it always matches whatever rules are actually installed.
+
+| Resource URI | Description |
+| --- | --- |
+| `hayabusa://rules` | Browsable rule catalog index, grouped by category, with per-category rule counts. |
+| `hayabusa://rules/{rule_id}` | Full detail for a single rule by its Sigma `id`. |
+| `hayabusa://attack/techniques` | ATT&CK technique ID -> detecting rules (detection coverage by technique). |
+| `hayabusa://attack/techniques/{technique_id}` | Rules detecting a single ATT&CK technique, e.g. `hayabusa://attack/techniques/T1059.001`. |
+| `hayabusa://attack/tactics` | ATT&CK tactic -> detecting rules (detection coverage by tactic). |
+
 ## Tests
 
 ```bash
 pytest
 ```
 
-All tests run against mocked subprocess calls, so no real `hayabusa` binary or `.evtx` file is required. Coverage is split across `tests/test_hayabusa.py` (the CLI wrapper functions), `tests/test_config.py` (binary resolution via `HAYABUSA_BIN`/`PATH`), and `tests/test_server.py` (the MCP tool registrations themselves).
+All tests run against mocked subprocess calls, so no real `hayabusa` binary or `.evtx` file is required. Coverage is split across `tests/test_hayabusa.py` (the CLI wrapper functions), `tests/test_knowledge.py` (rule catalog/ATT&CK aggregation, against real small YAML fixtures), `tests/test_config.py` (binary resolution via `HAYABUSA_BIN`/`PATH`), and `tests/test_server.py` (the MCP tool and resource registrations themselves).
 
 ## Lint / Typecheck
 

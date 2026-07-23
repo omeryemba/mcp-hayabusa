@@ -3,7 +3,7 @@ import asyncio
 import pytest
 from mcp.server.fastmcp.exceptions import ToolError
 
-from mcp_hayabusa import hayabusa, server
+from mcp_hayabusa import hayabusa, knowledge, server
 
 EXPECTED_TOOL_NAMES = {
     "hayabusa_version",
@@ -436,3 +436,96 @@ def test_call_tool_get_hayabusa_rules_error_propagates(monkeypatch):
 
     with pytest.raises(ToolError):
         asyncio.run(server.mcp.call_tool("get_hayabusa_rules", {"rules_dir": "/nope"}))
+
+
+EXPECTED_RESOURCE_URIS = {
+    "hayabusa://rules",
+    "hayabusa://attack/techniques",
+    "hayabusa://attack/tactics",
+}
+
+EXPECTED_RESOURCE_TEMPLATE_URIS = {
+    "hayabusa://rules/{rule_id}",
+    "hayabusa://attack/techniques/{technique_id}",
+}
+
+
+def test_all_resources_registered():
+    resources = asyncio.run(server.mcp.list_resources())
+    assert {str(r.uri) for r in resources} == EXPECTED_RESOURCE_URIS
+
+
+def test_all_resource_templates_registered():
+    templates = asyncio.run(server.mcp.list_resource_templates())
+    assert {t.uriTemplate for t in templates} == EXPECTED_RESOURCE_TEMPLATE_URIS
+
+
+def test_read_resource_rule_catalog_routes_through(monkeypatch):
+    monkeypatch.setattr(knowledge, "rules_index", lambda: {"categories": {"sigma/builtin": {}}})
+
+    result = asyncio.run(server.mcp.read_resource("hayabusa://rules"))
+
+    contents = list(result)
+    assert len(contents) == 1
+    assert contents[0].mime_type == "application/json"
+    assert "sigma/builtin" in contents[0].content
+
+
+def test_read_resource_rule_detail_passes_rule_id(monkeypatch):
+    captured = {}
+
+    def fake_get_rule(rule_id):
+        captured["rule_id"] = rule_id
+        return {"id": rule_id, "title": "Fake Rule"}
+
+    monkeypatch.setattr(knowledge, "get_rule", fake_get_rule)
+
+    result = asyncio.run(server.mcp.read_resource("hayabusa://rules/abc-123"))
+
+    assert captured["rule_id"] == "abc-123"
+    assert "Fake Rule" in list(result)[0].content
+
+
+def test_read_resource_rule_detail_not_found_propagates(monkeypatch):
+    # Unlike a plain (non-templated) resource's read() error -- which
+    # read_resource wraps as ResourceError -- an error raised while
+    # constructing a *templated* resource (i.e. inside the wrapped function
+    # itself) surfaces as a ValueError from the template machinery.
+    def fake_get_rule(rule_id):
+        raise KeyError(f"No rule found with id {rule_id!r}")
+
+    monkeypatch.setattr(knowledge, "get_rule", fake_get_rule)
+
+    with pytest.raises(ValueError, match="does-not-exist"):
+        asyncio.run(server.mcp.read_resource("hayabusa://rules/does-not-exist"))
+
+
+def test_read_resource_attack_technique_coverage_routes_through(monkeypatch):
+    monkeypatch.setattr(knowledge, "list_attack_techniques", lambda: {"techniques": {"T1059.001": {}}})
+
+    result = asyncio.run(server.mcp.read_resource("hayabusa://attack/techniques"))
+
+    assert "T1059.001" in list(result)[0].content
+
+
+def test_read_resource_attack_technique_detail_passes_technique_id(monkeypatch):
+    captured = {}
+
+    def fake_get_attack_technique(technique_id):
+        captured["technique_id"] = technique_id
+        return {"technique_id": technique_id, "rules": []}
+
+    monkeypatch.setattr(knowledge, "get_attack_technique", fake_get_attack_technique)
+
+    result = asyncio.run(server.mcp.read_resource("hayabusa://attack/techniques/T1059.001"))
+
+    assert captured["technique_id"] == "T1059.001"
+    assert "T1059.001" in list(result)[0].content
+
+
+def test_read_resource_attack_tactic_coverage_routes_through(monkeypatch):
+    monkeypatch.setattr(knowledge, "list_attack_tactics", lambda: {"tactics": {"execution": {}}})
+
+    result = asyncio.run(server.mcp.read_resource("hayabusa://attack/tactics"))
+
+    assert "execution" in list(result)[0].content
