@@ -306,10 +306,10 @@ def test_call_tool_scan_evtx_passes_kwargs(monkeypatch):
         return {
             "target": target,
             "min_level": kwargs.get("min_level"),
-            "log_metrics": {},
-            "detections": {},
-            "eid_metrics": {},
+            "rule_filter": kwargs.get("rule_filter"),
+            "output_format": kwargs.get("output_format", "summary"),
             "summary": {},
+            "top_findings": [],
         }
 
     monkeypatch.setattr(hayabusa, "scan_evtx", fake_scan_evtx)
@@ -322,4 +322,50 @@ def test_call_tool_scan_evtx_passes_kwargs(monkeypatch):
     )
 
     assert captured["target"] == "/some/path.evtx"
-    assert captured["kwargs"] == {"min_level": "high", "max_rows": 50}
+    assert captured["kwargs"] == {
+        "min_level": "high",
+        "rule_filter": None,
+        "output_format": "summary",
+        "max_results": None,
+        "max_rows": 50,
+    }
+
+
+def test_call_tool_scan_evtx_passes_rule_filter_and_output_format(monkeypatch):
+    captured = {}
+
+    def fake_scan_evtx(target, **kwargs):
+        captured["target"] = target
+        captured["kwargs"] = kwargs
+        return {
+            "target": target,
+            "min_level": None,
+            "rule_filter": kwargs.get("rule_filter"),
+            "output_format": kwargs.get("output_format"),
+            "log_metrics": {},
+            "detections": {},
+            "eid_metrics": {},
+            "summary": {},
+        }
+
+    monkeypatch.setattr(hayabusa, "scan_evtx", fake_scan_evtx)
+
+    asyncio.run(
+        server.mcp.call_tool(
+            "scan_evtx",
+            {
+                "target": "/some/path.evtx",
+                "rule_filter": "mimikatz",
+                "output_format": "full",
+                "max_results": 5,
+            },
+        )
+    )
+
+    assert captured["kwargs"] == {
+        "min_level": None,
+        "rule_filter": "mimikatz",
+        "output_format": "full",
+        "max_results": 5,
+        "max_rows": 200,
+    }

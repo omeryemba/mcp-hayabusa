@@ -679,11 +679,13 @@ def test_search_missing_output_returns_empty(tmp_path, monkeypatch):
     assert result["truncated"] is False
 
 
-def test_scan_evtx_composes_existing_wrappers(tmp_path, monkeypatch):
+def _patch_scan_evtx_wrappers(monkeypatch, tmp_path, detection_rows=None):
     # scan_evtx must not shell out itself -- it should only call the
     # existing hayabusa.py wrapper functions. Monkeypatch those directly
     # (not _run) so a call to _run here would mean scan_evtx bypassed them.
     captured = {}
+    if detection_rows is None:
+        detection_rows = [{"RuleTitle": "Rule 0"}]
 
     def fake_log_metrics(target, **kwargs):
         captured["log_metrics"] = (target, kwargs)
@@ -701,9 +703,9 @@ def test_scan_evtx_composes_existing_wrappers(tmp_path, monkeypatch):
         return {
             "command": "hayabusa csv-timeline",
             "total_rows": 10,
-            "returned_rows": 2,
+            "returned_rows": len(detection_rows),
             "truncated": True,
-            "rows": [{"RuleTitle": "Rule 0"}],
+            "rows": list(detection_rows),
             "stderr_summary": "",
         }
 
@@ -726,17 +728,25 @@ def test_scan_evtx_composes_existing_wrappers(tmp_path, monkeypatch):
     monkeypatch.setattr(hayabusa, "eid_metrics", fake_eid_metrics)
     monkeypatch.setattr(hayabusa, "_run", fail_if_called)
     monkeypatch.setattr(hayabusa, "_require_existing_path", lambda p, label="target": tmp_path)
+    return captured
 
-    result = hayabusa.scan_evtx(str(tmp_path), min_level="high", max_rows=50)
+
+def test_scan_evtx_full_composes_existing_wrappers(tmp_path, monkeypatch):
+    captured = _patch_scan_evtx_wrappers(monkeypatch, tmp_path)
+
+    result = hayabusa.scan_evtx(str(tmp_path), min_level="high", max_rows=50, output_format="full")
 
     assert result["target"] == str(tmp_path)
     assert result["min_level"] == "high"
+    assert result["rule_filter"] is None
+    assert result["output_format"] == "full"
     assert result["log_metrics"]["rows"] == [{"Filename": "a.evtx"}]
     assert result["detections"]["rows"] == [{"RuleTitle": "Rule 0"}]
     assert result["eid_metrics"]["rows"] == [{"EventID": "4624"}]
     assert result["summary"] == {
         "log_files_scanned": 3,
         "total_detections": 10,
+        "matched_detections": 10,
         "detections_truncated": True,
         "distinct_event_ids": 7,
     }
@@ -747,6 +757,82 @@ def test_scan_evtx_composes_existing_wrappers(tmp_path, monkeypatch):
     assert captured["csv_timeline"][1]["max_rows"] == 50
     assert captured["log_metrics"][1]["max_rows"] == 50
     assert captured["eid_metrics"][1]["max_rows"] == 50
+
+
+def test_scan_evtx_default_output_format_is_summary(tmp_path, monkeypatch):
+    _patch_scan_evtx_wrappers(monkeypatch, tmp_path)
+
+    result = hayabusa.scan_evtx(str(tmp_path))
+
+    assert result["output_format"] == "summary"
+    assert "log_metrics" not in result
+    assert "detections" not in result
+    assert "eid_metrics" not in result
+    assert result["summary"]["total_detections"] == 10
+    assert result["top_findings"] == [{"RuleTitle": "Rule 0"}]
+
+
+def test_scan_evtx_invalid_output_format_raises(tmp_path, monkeypatch):
+    _patch_scan_evtx_wrappers(monkeypatch, tmp_path)
+
+    with pytest.raises(ValueError):
+        hayabusa.scan_evtx(str(tmp_path), output_format="verbose")
+
+
+def test_scan_evtx_rule_filter_matches_case_insensitively(tmp_path, monkeypatch):
+    rows = [
+        {"RuleTitle": "Suspicious PowerShell Download"},
+        {"RuleTitle": "Mimikatz Credential Dumping"},
+        {"RuleTitle": "powershell Encoded Command"},
+    ]
+    _patch_scan_evtx_wrappers(monkeypatch, tmp_path, detection_rows=rows)
+
+    result = hayabusa.scan_evtx(str(tmp_path), rule_filter="powershell", output_format="full")
+
+    assert result["rule_filter"] == "powershell"
+    assert result["detections"]["rows"] == [
+        {"RuleTitle": "Suspicious PowerShell Download"},
+        {"RuleTitle": "powershell Encoded Command"},
+    ]
+    assert result["detections"]["rule_filter_matches"] == 2
+    assert result["summary"]["matched_detections"] == 2
+    # total_detections stays the true hayabusa-reported total, unaffected
+    # by rule_filter.
+    assert result["summary"]["total_detections"] == 10
+
+
+def test_scan_evtx_rule_filter_no_matches(tmp_path, monkeypatch):
+    rows = [{"RuleTitle": "Suspicious PowerShell Download"}]
+    _patch_scan_evtx_wrappers(monkeypatch, tmp_path, detection_rows=rows)
+
+    result = hayabusa.scan_evtx(str(tmp_path), rule_filter="mimikatz")
+
+    assert result["top_findings"] == []
+    assert result["summary"]["matched_detections"] == 0
+
+
+def test_scan_evtx_max_results_limits_findings(tmp_path, monkeypatch):
+    rows = [{"RuleTitle": f"Rule {i}"} for i in range(5)]
+    _patch_scan_evtx_wrappers(monkeypatch, tmp_path, detection_rows=rows)
+
+    result = hayabusa.scan_evtx(str(tmp_path), max_results=2, output_format="full")
+
+    assert result["detections"]["rows"] == [{"RuleTitle": "Rule 0"}, {"RuleTitle": "Rule 1"}]
+    assert result["detections"]["returned_rows"] == 2
+    # max_results only narrows detections/findings, not the true total.
+    assert result["summary"]["total_detections"] == 10
+
+
+def test_scan_evtx_max_results_default_preserves_prior_behavior(tmp_path, monkeypatch):
+    rows = [{"RuleTitle": f"Rule {i}"} for i in range(5)]
+    _patch_scan_evtx_wrappers(monkeypatch, tmp_path, detection_rows=rows)
+
+    result = hayabusa.scan_evtx(str(tmp_path), output_format="full")
+
+    # No max_results given -- all fetched rows pass through untouched, and
+    # the detections dict is byte-identical to what csv_timeline returned.
+    assert result["detections"]["rows"] == rows
+    assert "rule_filter_matches" not in result["detections"]
 
 
 def test_scan_evtx_target_must_exist(tmp_path):
