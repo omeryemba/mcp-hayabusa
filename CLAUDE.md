@@ -21,9 +21,12 @@ python -m mcp_hayabusa
 # Tests
 pytest
 pytest tests/test_hayabusa.py::test_csv_timeline_parses_and_truncates  # single test
-```
 
-There is no separate lint/typecheck command configured yet.
+# Lint / typecheck
+ruff check .
+mypy          # checks src/mcp_hayabusa (see [tool.mypy] in pyproject.toml)
+mypy tests    # tests aren't covered by the mypy config's default package selection
+```
 
 ## Architecture
 

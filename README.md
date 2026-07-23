@@ -74,3 +74,12 @@ pytest
 ```
 
 All tests run against mocked subprocess calls, so no real `hayabusa` binary or `.evtx` file is required. Coverage is split across `tests/test_hayabusa.py` (the CLI wrapper functions), `tests/test_config.py` (binary resolution via `HAYABUSA_BIN`/`PATH`), and `tests/test_server.py` (the MCP tool registrations themselves).
+
+## Lint / Typecheck
+
+```bash
+ruff check .
+mypy
+```
+
+Both run in CI (see the `lint` job in `.github/workflows/test.yml`), alongside `mypy tests` since the tests directory isn't covered by `[tool.mypy]`'s default package selection.
