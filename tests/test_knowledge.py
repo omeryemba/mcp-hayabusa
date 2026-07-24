@@ -76,6 +76,47 @@ def test_load_rule_catalog_missing_dir_raises(tmp_path):
         knowledge.load_rule_catalog(str(tmp_path / "nope"))
 
 
+# --- in-memory catalog cache -------------------------------------------------
+
+
+def test_load_rule_catalog_second_call_reuses_cache(rules_dir, monkeypatch):
+    parse_calls = []
+    original_parse_rule_file = knowledge._parse_rule_file
+
+    def counting_parse_rule_file(path, base):
+        parse_calls.append(path)
+        return original_parse_rule_file(path, base)
+
+    monkeypatch.setattr(knowledge, "_parse_rule_file", counting_parse_rule_file)
+
+    rules_path1, records1, errors1 = knowledge.load_rule_catalog(str(rules_dir))
+    assert len(parse_calls) == 5  # cache miss: all 5 rule files (3 valid + 2 malformed) parsed
+
+    parse_calls.clear()
+    rules_path2, records2, errors2 = knowledge.load_rule_catalog(str(rules_dir))
+    assert parse_calls == []  # cache hit: no files re-parsed
+
+    assert rules_path1 == rules_path2
+    assert records1 == records2
+    assert errors1 == errors2 == 2
+
+
+def test_load_rule_catalog_cache_keyed_by_resolved_path(tmp_path):
+    dir_a = tmp_path / "a"
+    dir_a.mkdir()
+    (dir_a / "rule.yml").write_text(VALID_RULE_A, encoding="utf-8")
+
+    dir_b = tmp_path / "b"
+    dir_b.mkdir()
+    (dir_b / "rule.yml").write_text(VALID_RULE_B, encoding="utf-8")
+
+    _, records_a, _ = knowledge.load_rule_catalog(str(dir_a))
+    _, records_b, _ = knowledge.load_rule_catalog(str(dir_b))
+
+    assert [r["title"] for r in records_a] == ["Mimikatz Command Line"]
+    assert [r["title"] for r in records_b] == ["PowerShell Encoded Command"]
+
+
 # --- YAML loader selection (performance) ------------------------------------
 
 
