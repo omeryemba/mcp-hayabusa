@@ -110,15 +110,32 @@ def _parse_rule_file(path: Path, base: Path) -> dict | None:
     }
 
 
+# In-memory cache of parsed rule catalogs, keyed by resolved rules_path.
+# Parsing ~5,000 rule files takes seconds even with CSafeLoader, and every
+# resource/tool in this module re-parses the whole directory on every call --
+# this cache makes every call after the first one for a given rules_dir
+# effectively free. No invalidation: the rule set only changes via
+# hayabusa_update_rules or manual edits, not within a single server process's
+# lifetime, so a process restart (the same thing needed to pick up any other
+# code/data change here) is what refreshes it.
+_CATALOG_CACHE: dict[Path, tuple[list[dict], int]] = {}
+
+
 def load_rule_catalog(rules_dir: str | None = None) -> tuple[Path, list[dict], int]:
-    """Parse every Sigma rule under rules_dir.
+    """Parse every Sigma rule under rules_dir, caching the result in memory.
 
     Returns (resolved rules_path, parsed rule records, parse_errors count).
     Malformed rule files are skipped and counted rather than raising, same
-    as get_hayabusa_rules.
+    as get_hayabusa_rules. The first call for a given rules_dir parses every
+    file; subsequent calls for that same resolved path reuse the cached
+    result instead of re-parsing.
     """
     rules_path = _resolve_rules_dir(rules_dir)
-    records: list[dict] = []
+    if rules_path in _CATALOG_CACHE:
+        records, parse_errors = _CATALOG_CACHE[rules_path]
+        return rules_path, records, parse_errors
+
+    records = []
     parse_errors = 0
     for rule_file in _iter_rule_files(rules_path):
         record = _parse_rule_file(rule_file, rules_path)
@@ -126,6 +143,8 @@ def load_rule_catalog(rules_dir: str | None = None) -> tuple[Path, list[dict], i
             parse_errors += 1
             continue
         records.append(record)
+
+    _CATALOG_CACHE[rules_path] = (records, parse_errors)
     return rules_path, records, parse_errors
 
 
