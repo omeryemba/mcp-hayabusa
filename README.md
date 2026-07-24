@@ -68,10 +68,12 @@ The server communicates over stdio, so it's meant to be launched by an MCP clien
 | `hayabusa_config_critical_systems` | Detect likely domain controllers and file servers from the logs. |
 | `hayabusa_search` | Keyword/regex search over `.evtx` event records. |
 | `scan_evtx` | High-level first-pass scan: combines log metadata, a detection timeline (filtered by min level and an optional rule-title keyword filter), and event ID metrics. Returns a concise `summary`/`top_findings` result by default, or the full combined result with `output_format="full"`. |
+| `analyze_coverage` | ATT&CK detection coverage over the installed rule set: an overall technique/tactic breakdown sorted weakest-covered first, or a focused answer for one `technique_id`. Coverage is measured only against techniques/tactics referenced by installed rules, not the full ATT&CK matrix — see the tool's `coverage_scope` caveat. |
+| `suggest_rule` | Rank installed Sigma rules by relevance to a free-text query (title match > tags match > description match), optionally scoped to an ATT&CK `technique_id`. Finds and ranks *existing* rules; unlike `get_hayabusa_rules`'s exact substring match, results are relevance-ordered and capped at `max_suggestions`. |
 
 ## Resources
 
-Unlike the tools above (which run analysis against `.evtx` files you point them at), these are read-only MCP resources for browsing the *installed detection rule set itself* — no `.evtx` file required. ATT&CK technique/tactic data is derived entirely from each Sigma rule's own `tags:` field (e.g. `attack.t1059.001`, `attack.execution`), not a bundled MITRE dataset, so it always matches whatever rules are actually installed.
+Unlike the tools above (which run analysis against `.evtx` files you point them at), these are read-only MCP resources for browsing the *installed detection rule set itself* — no `.evtx` file required. ATT&CK technique/tactic data is derived entirely from each Sigma rule's own `tags:` field (e.g. `attack.t1059.001`, `attack.execution`), not a bundled MITRE dataset, so it always matches whatever rules are actually installed. Each technique also gets a `mitre_url` (computed from the ID, e.g. `https://attack.mitre.org/techniques/T1059/001/`) and each tactic a hand-maintained `display_name` (e.g. `credential-access` → "Credential Access") — see `CLAUDE.md` for why technique IDs are *not* similarly enriched with human-readable names.
 
 | Resource URI | Description |
 | --- | --- |
