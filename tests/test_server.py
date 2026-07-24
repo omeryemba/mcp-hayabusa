@@ -21,6 +21,8 @@ EXPECTED_TOOL_NAMES = {
     "hayabusa_search",
     "scan_evtx",
     "get_hayabusa_rules",
+    "analyze_coverage",
+    "suggest_rule",
 }
 
 
@@ -436,6 +438,144 @@ def test_call_tool_get_hayabusa_rules_error_propagates(monkeypatch):
 
     with pytest.raises(ToolError):
         asyncio.run(server.mcp.call_tool("get_hayabusa_rules", {"rules_dir": "/nope"}))
+
+
+def test_call_tool_analyze_coverage_passes_kwargs(monkeypatch):
+    captured = {}
+
+    def fake_analyze_coverage(**kwargs):
+        captured["kwargs"] = kwargs
+        return {
+            "rules_dir": "/rules",
+            "coverage_scope": "note",
+            "total_rules_scanned": 0,
+            "parse_errors": 0,
+            "total_techniques_covered": 0,
+            "total_tactics_covered": 0,
+            "techniques_by_coverage": [],
+            "techniques_truncated": False,
+            "tactics_by_coverage": [],
+            "tactics_truncated": False,
+        }
+
+    monkeypatch.setattr(knowledge, "analyze_coverage", fake_analyze_coverage)
+
+    asyncio.run(
+        server.mcp.call_tool(
+            "analyze_coverage",
+            {"technique_id": "T1059.001", "rules_dir": "/custom/rules", "max_items": 50},
+        )
+    )
+
+    assert captured["kwargs"] == {
+        "rules_dir": "/custom/rules",
+        "technique_id": "T1059.001",
+        "max_items": 50,
+    }
+
+
+def test_call_tool_analyze_coverage_default_kwargs(monkeypatch):
+    captured = {}
+
+    def fake_analyze_coverage(**kwargs):
+        captured["kwargs"] = kwargs
+        return {"rules_dir": "/rules", "coverage_scope": "note"}
+
+    monkeypatch.setattr(knowledge, "analyze_coverage", fake_analyze_coverage)
+
+    asyncio.run(server.mcp.call_tool("analyze_coverage", {}))
+
+    assert captured["kwargs"] == {"rules_dir": None, "technique_id": None, "max_items": 200}
+
+
+def test_call_tool_analyze_coverage_error_propagates(monkeypatch):
+    def fake_analyze_coverage(**kwargs):
+        raise FileNotFoundError("rules_dir does not exist: /nope")
+
+    monkeypatch.setattr(knowledge, "analyze_coverage", fake_analyze_coverage)
+
+    with pytest.raises(ToolError):
+        asyncio.run(server.mcp.call_tool("analyze_coverage", {"rules_dir": "/nope"}))
+
+
+def test_call_tool_suggest_rule_passes_kwargs(monkeypatch):
+    captured = {}
+
+    def fake_suggest_rule(query, **kwargs):
+        captured["query"] = query
+        captured["kwargs"] = kwargs
+        return {
+            "rules_dir": "/rules",
+            "query": query,
+            "technique_id": kwargs.get("technique_id"),
+            "candidates_considered": 0,
+            "parse_errors": 0,
+            "total_matches": 0,
+            "returned_suggestions": 0,
+            "truncated": False,
+            "suggestions": [],
+        }
+
+    monkeypatch.setattr(knowledge, "suggest_rule", fake_suggest_rule)
+
+    asyncio.run(
+        server.mcp.call_tool(
+            "suggest_rule",
+            {
+                "query": "mimikatz credential dumping",
+                "technique_id": "T1003.001",
+                "max_suggestions": 3,
+                "rules_dir": "/custom/rules",
+            },
+        )
+    )
+
+    assert captured["query"] == "mimikatz credential dumping"
+    assert captured["kwargs"] == {
+        "technique_id": "T1003.001",
+        "max_suggestions": 3,
+        "rules_dir": "/custom/rules",
+    }
+
+
+def test_call_tool_suggest_rule_default_kwargs(monkeypatch):
+    captured = {}
+
+    def fake_suggest_rule(query, **kwargs):
+        captured["query"] = query
+        captured["kwargs"] = kwargs
+        return {
+            "rules_dir": "/rules",
+            "query": query,
+            "technique_id": None,
+            "candidates_considered": 0,
+            "parse_errors": 0,
+            "total_matches": 0,
+            "returned_suggestions": 0,
+            "truncated": False,
+            "suggestions": [],
+        }
+
+    monkeypatch.setattr(knowledge, "suggest_rule", fake_suggest_rule)
+
+    asyncio.run(server.mcp.call_tool("suggest_rule", {"query": "powershell"}))
+
+    assert captured["query"] == "powershell"
+    assert captured["kwargs"] == {
+        "technique_id": None,
+        "max_suggestions": 10,
+        "rules_dir": None,
+    }
+
+
+def test_call_tool_suggest_rule_empty_query_error_propagates(monkeypatch):
+    def fake_suggest_rule(query, **kwargs):
+        raise ValueError("query must be a non-empty string")
+
+    monkeypatch.setattr(knowledge, "suggest_rule", fake_suggest_rule)
+
+    with pytest.raises(ToolError):
+        asyncio.run(server.mcp.call_tool("suggest_rule", {"query": ""}))
 
 
 EXPECTED_RESOURCE_URIS = {

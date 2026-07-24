@@ -282,6 +282,79 @@ def scan_evtx(
     )
 
 
+@mcp.tool()
+def analyze_coverage(
+    technique_id: str | None = None,
+    rules_dir: str | None = None,
+    max_items: int = 200,
+) -> dict:
+    """Analyze ATT&CK detection coverage across the installed Sigma rule set.
+
+    With no technique_id, returns an overall breakdown of how many rules
+    cover each ATT&CK technique/tactic referenced anywhere in the rule set,
+    sorted ascending by rule count so the weakest-covered techniques/tactics
+    are easy to spot. With technique_id, returns a focused answer for just
+    that one technique instead (rule_count 0 / covered=False if no
+    installed rule references it -- not an error, a normal coverage
+    answer).
+
+    IMPORTANT: coverage here means "referenced by tags on installed rules,"
+    not a gap analysis against the full MITRE ATT&CK matrix -- no MITRE
+    reference dataset is bundled, so this cannot report techniques with
+    zero rules across all of ATT&CK, only the distribution across what is
+    actually installed. See coverage_scope in the result for this caveat.
+
+    Args:
+        technique_id: Optional single ATT&CK technique ID (e.g.
+            "T1059.001") to report focused coverage for instead of the
+            full breakdown.
+        rules_dir: Optional path to a rules directory. Defaults to the
+            "rules" directory next to the resolved hayabusa binary.
+        max_items: Maximum number of techniques/tactics to include in the
+            overall breakdown lists (default 200). Ignored when
+            technique_id is given.
+    """
+    return knowledge.analyze_coverage(
+        rules_dir=rules_dir, technique_id=technique_id, max_items=max_items
+    )
+
+
+@mcp.tool()
+def suggest_rule(
+    query: str,
+    technique_id: str | None = None,
+    max_suggestions: int = 10,
+    rules_dir: str | None = None,
+) -> dict:
+    """Suggest existing installed Sigma rules relevant to a free-text query.
+
+    Unlike get_hayabusa_rules (exact case-insensitive substring match,
+    returns every match), this scores each rule by how many of query's
+    terms it matches -- a title match outweighs a tags match, which
+    outweighs a description-only match -- and returns only the top
+    max_suggestions candidates, most relevant first. Use this for "is there
+    already a rule for X" / "which existing rule is closest to Y"; it finds
+    and ranks existing rules, it does not write or generate new ones.
+
+    Args:
+        query: Free-text description of the detection you're looking for,
+            e.g. "mimikatz credential dumping". Required, non-empty.
+        technique_id: Optional ATT&CK technique ID (e.g. "T1003.001") to
+            restrict candidates to rules already tagged with that
+            technique before ranking.
+        max_suggestions: Maximum number of ranked candidates to return
+            (default 10).
+        rules_dir: Optional path to a rules directory. Defaults to the
+            "rules" directory next to the resolved hayabusa binary.
+    """
+    return knowledge.suggest_rule(
+        query,
+        technique_id=technique_id,
+        max_suggestions=max_suggestions,
+        rules_dir=rules_dir,
+    )
+
+
 @mcp.resource(
     "hayabusa://rules",
     name="rule_catalog",
