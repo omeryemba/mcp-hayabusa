@@ -29,6 +29,21 @@ MAX_SUGGESTIONS_RETURNED = 10
 _TECHNIQUE_TAG_RE = re.compile(r"^attack\.(t\d{4}(?:\.\d{3})?)$", re.IGNORECASE)
 _TACTIC_TAG_RE = re.compile(r"^attack\.([a-z][a-z-]*)$", re.IGNORECASE)
 
+# yaml.safe_load() always uses PyYAML's pure-Python SafeLoader, even when the
+# much faster libyaml C bindings (CSafeLoader) are installed -- you have to
+# ask for them explicitly. On a rules directory with ~5,000 files that's the
+# difference between load_rule_catalog() taking ~30s (slow enough to blow
+# past some MCP clients' request timeouts) and ~7s. Not every PyYAML install
+# ships the C extension, so fall back to SafeLoader when it's missing --
+# output is identical either way, only parse speed differs.
+
+
+def _select_yaml_loader(yaml_module: object = yaml) -> type[yaml.SafeLoader]:
+    return getattr(yaml_module, "CSafeLoader", yaml.SafeLoader)
+
+
+_YAML_LOADER: type[yaml.SafeLoader] = _select_yaml_loader()
+
 # Human-readable names for the 14 Enterprise ATT&CK tactics. Hand-maintained
 # here rather than sourced from a bundled dataset -- these have been stable
 # across ATT&CK versions, unlike the much larger and more volatile technique
@@ -74,7 +89,7 @@ def _iter_rule_files(rules_path: Path) -> list[Path]:
 def _parse_rule_file(path: Path, base: Path) -> dict | None:
     try:
         with path.open(encoding="utf-8") as f:
-            data = yaml.safe_load(f)
+            data = yaml.load(f, Loader=_YAML_LOADER)
     except yaml.YAMLError:
         return None
     if not isinstance(data, dict):

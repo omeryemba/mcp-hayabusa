@@ -1,4 +1,5 @@
 import pytest
+import yaml
 
 from mcp_hayabusa import knowledge
 
@@ -73,6 +74,38 @@ def test_load_rule_catalog_parses_valid_and_counts_errors(rules_dir):
 def test_load_rule_catalog_missing_dir_raises(tmp_path):
     with pytest.raises(FileNotFoundError):
         knowledge.load_rule_catalog(str(tmp_path / "nope"))
+
+
+# --- YAML loader selection (performance) ------------------------------------
+
+
+def test_select_yaml_loader_prefers_csafeloader_when_available():
+    # This environment ships libyaml, so CSafeLoader should be picked.
+    assert knowledge._select_yaml_loader() is yaml.CSafeLoader
+
+
+def test_select_yaml_loader_falls_back_to_safeloader_when_csafeloader_missing():
+    class FakeYamlModuleWithoutCLoader:
+        SafeLoader = yaml.SafeLoader
+        # Deliberately no CSafeLoader attribute -- simulates a PyYAML install
+        # without the libyaml C extension.
+
+    assert knowledge._select_yaml_loader(FakeYamlModuleWithoutCLoader) is yaml.SafeLoader
+
+
+def test_parse_rule_file_works_with_fallback_safeloader(rules_dir, monkeypatch):
+    # Force the pure-Python loader and confirm parsing still produces the
+    # same output -- the fallback path must not change behavior, only speed.
+    monkeypatch.setattr(knowledge, "_YAML_LOADER", yaml.SafeLoader)
+
+    rules_path, records, parse_errors = knowledge.load_rule_catalog(str(rules_dir))
+
+    assert parse_errors == 2
+    assert {r["title"] for r in records} == {
+        "Mimikatz Command Line",
+        "PowerShell Encoded Command",
+        "Suspicious Scheduled Task",
+    }
 
 
 def test_technique_ids_matches_technique_and_subtechnique_only():
