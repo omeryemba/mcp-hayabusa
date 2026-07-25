@@ -1,0 +1,65 @@
+title: Suspicious Access to LSASS Process Memory
+id: 0b7ec4fe-f185-4039-82ef-12ab1669ebc6
+status: experimental
+description: |
+  Detects processes requesting a high-privilege access right (read memory / all access)
+  against lsass.exe, the classic prerequisite for dumping LSASS memory to harvest
+  credential material (T1003.001). Matches on Sysmon Event ID 10 (ProcessAccess)
+  with a GrantedAccess mask commonly associated with credential-dumping tools
+  (procdump, Mimikatz, Task Manager "Create dump file", direct MiniDumpWriteDump
+  callers), then excludes a short list of known-benign source processes (AV/EDR
+  engines, Windows Error Reporting, the OS's own service control processes).
+
+  Severity: high, because a successful high-privilege open handle to LSASS is very
+  often the direct precursor to credential theft, which commonly enables lateral
+  movement and privilege escalation; not "critical" because this rule (like any
+  GrantedAccess-mask-based detection) can still be triggered by legitimate,
+  unlisted EDR/diagnostic tooling in environments this rule wasn't tuned for, so a
+  human should confirm SourceImage legitimacy before treating a hit as confirmed
+  compromise.
+references:
+  - https://attack.mitre.org/techniques/T1003/001/
+  - https://learn.microsoft.com/en-us/sysinternals/downloads/procdump
+  - https://web.archive.org/web/20191227142832/https://blog.f-secure.com/hunting-for-lsass-process-dumping/
+author: mcp-hayabusa
+date: 2026-07-25
+tags:
+  - attack.credential-access
+  - attack.t1003.001
+logsource:
+  category: process_access
+  product: windows
+detection:
+  selection_target:
+    TargetImage|endswith: '\lsass.exe'
+  selection_access:
+    GrantedAccess:
+      - '0x1010'
+      - '0x1410'
+      - '0x1438'
+      - '0x143a'
+      - '0x1fffff'
+      - '0x1f1fff'
+      - '0x1f0fff'
+      - '0x1f2fff'
+  filter_known_benign_sources:
+    SourceImage|endswith:
+      - '\MsMpEng.exe'
+      - '\MsSense.exe'
+      - '\WerFault.exe'
+      - '\WerFaultSecure.exe'
+      - '\svchost.exe'
+      - '\wininit.exe'
+      - '\services.exe'
+  condition: selection_target and selection_access and not filter_known_benign_sources
+falsepositives:
+  - Endpoint protection / EDR agents (Defender, CrowdStrike, SentinelOne, etc.) that
+    are not covered by 'filter_known_benign_sources' in this environment's specific
+    build/version — extend the filter with the exact SourceImage path once confirmed.
+  - Windows Error Reporting (WerFault.exe) generating a crash dump after lsass.exe
+    itself faults, rather than an external process reading its memory.
+  - Backup, monitoring, or vulnerability-scanning agents that enumerate process
+    handles system-wide as part of normal operation (e.g. some HIDS/FIM agents).
+  - Authorized incident-response or forensic tooling intentionally capturing LSASS
+    memory during an approved investigation.
+level: high
