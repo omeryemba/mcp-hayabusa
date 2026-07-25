@@ -26,6 +26,20 @@ Enforce these standards on every Sigma/detection rule this project writes, revie
 - **When discussing detection coverage:** frame gaps in terms of ATT&CK technique coverage (this project's `analyze_coverage`/`suggest_rule` tools already report coverage this way — align terminology with that).
 - **When working with any YAML detection file:** treat these five checks as a gate before considering the file complete, regardless of which specific tool or task triggered the edit.
 
+## Validation
+
+After creating or modifying a rule, validate it against these standards with the skill's own script rather than eyeballing compliance:
+
+```
+python .claude/skills/detection-engineering/scripts/validate-rule.py path/to/rule.yml
+```
+
+- **Input:** a single positional argument — the path to the Sigma rule YAML file to check.
+- **Checks performed:** the same four machine-checkable standards from the checklist above — an `attack.tXXXX`/`attack.tXXXX.XXX` technique tag is present (standard 1); `level:` is one of `low`, `medium`, `high`, `critical` (standard 2); `falsepositives:` exists and contains at least one real, non-placeholder entry, not `Unknown` or empty (standard 3); a sibling `<rule-stem>.testcases.md` file exists next to the rule and is non-empty (standard 4). Naming convention (standard 5) isn't checked by the script — verify that one by eye.
+- **Output:** a JSON report on stdout — `valid`, a per-check breakdown, and an `issues` list explaining anything that failed — plus an exit code (`0` valid, `1` one or more checks failed, `2` usage/parse error such as a missing file or malformed YAML).
+
+Treat a non-zero exit as the rule not being done yet — fix what `issues` calls out and re-run rather than shipping a rule the script hasn't passed.
+
 ## References
 
 When writing rules, consult:
