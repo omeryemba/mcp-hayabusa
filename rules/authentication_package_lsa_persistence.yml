@@ -1,0 +1,61 @@
+title: LSA Authentication Package Persistence
+id: 9ad44d33-4f99-4c45-be87-cbaa02324243
+status: experimental
+description: |
+  Detects a new value being set on the LSA 'Authentication Packages' registry
+  value (HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Authentication Packages).
+  DLLs listed here are loaded into lsass.exe by the Local Security Authority
+  at every boot, giving an attacker persistent, SYSTEM-level code execution
+  that starts before most EDR/AV agents finish initializing, and that can
+  observe credential material during logon (T1547.002).
+
+  This is the same LSA-registry-persistence pattern as the Security Support
+  Provider technique (T1547.005) — same registry key, a neighboring value —
+  for which this rule set already has a dedicated, high-severity detection
+  (registry_event_ssp_added_lsa_config.yml). The Authentication Packages
+  value had no equivalent dedicated rule prior to this one.
+
+  Severity: high, because a successful write to this value grants an
+  attacker persistent SYSTEM-context code execution with credential
+  visibility on every boot, which is a serious and hard-to-remove foothold;
+  not "critical" because legitimate security/identity software (smart card
+  middleware, SSO/federation clients, some VPN/DLP suites) also registers
+  custom authentication packages here, so a human should confirm the DLL
+  named in the new value is not an expected, signed, vendor-installed
+  component before escalating.
+references:
+  - https://attack.mitre.org/techniques/T1547/002/
+  - https://learn.microsoft.com/en-us/windows/win32/secauthn/authentication-packages
+  - https://learn.microsoft.com/en-us/windows/win32/secauthn/writing-an-authentication-package
+author: mcp-hayabusa
+date: 2026-07-25
+tags:
+  - attack.persistence
+  - attack.credential-access
+  - attack.t1547.002
+logsource:
+  category: registry_event
+  product: windows
+detection:
+  selection_target:
+    TargetObject|endswith: '\Control\Lsa\Authentication Packages'
+  selection_type:
+    EventType: SetValue
+  condition: selection_target and selection_type
+falsepositives:
+  - Installation or reconfiguration of legitimate third-party authentication
+    software that registers its own authentication package (e.g. smart-card
+    middleware, SSO/federation clients, some VPN or DLP endpoint suites) —
+    verify the DLL named in the new value is signed and matches a known
+    vendor install before escalating.
+  - Windows feature updates / in-place OS upgrades that rewrite LSA
+    configuration as part of reapplying default security settings.
+  - Group Policy or configuration-management tooling (SCCM, Intune, custom
+    LSA-hardening scripts) that intentionally manages this value as part of
+    an approved security baseline.
+  - This rule fires on any SetValue event against this registry value
+    regardless of which DLL is named, since Sysmon's registry_event category
+    does not reliably expose the new value's contents for every provider/
+    event combination — triage should confirm the actual DLL added, not
+    just that the value changed.
+level: high
