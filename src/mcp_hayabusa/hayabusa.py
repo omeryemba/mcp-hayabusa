@@ -689,7 +689,6 @@ def search(
             str(target_path),
             "-o",
             str(output_path),
-            "-w",
         ]
         flag = "-r" if regex else "-k"
         for keyword in keywords:

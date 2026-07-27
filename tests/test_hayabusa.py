@@ -754,6 +754,26 @@ def test_search_uses_regex_flag(tmp_path, monkeypatch):
     assert args[args.index("-r") + 1] == "a.*b"
 
 
+def test_search_does_not_pass_wizard_flag(tmp_path, monkeypatch):
+    captured = {}
+
+    def fake_run(args, timeout_sec=600):
+        captured["args"] = args
+        output_path = Path(args[args.index("-o") + 1])
+        with output_path.open("w", newline="", encoding="utf-8") as f:
+            csv.writer(f).writerow(["Timestamp"])
+        return FakeResult(returncode=0, command=["hayabusa", *args])
+
+    monkeypatch.setattr(hayabusa, "_run", fake_run)
+    monkeypatch.setattr(hayabusa, "_require_existing_path", lambda p, label="target": tmp_path)
+
+    hayabusa.search(str(tmp_path), ["needle"])
+
+    # Unlike csv-timeline/json-timeline/logon-summary, hayabusa's search
+    # subcommand rejects -w outright ("unexpected argument '-w' found").
+    assert "-w" not in captured["args"]
+
+
 def test_search_missing_output_returns_empty(tmp_path, monkeypatch):
     monkeypatch.setattr(
         hayabusa, "_run", lambda args, timeout_sec=600: FakeResult(returncode=1, stderr="boom")
