@@ -1,59 +1,31 @@
 # Test cases: ntds_dit_extraction_via_ntdsutil_esent
 
-## Positive (must match)
+Executed against the real sample `dc_applog_ntdsutil_dfir_325_326_327.evtx`
+(EVTX-ATTACK-SAMPLES corpus) via `hayabusa_csv_timeline` with
+`rules_dir` pointed at this project's `rules/` directory, 2026-07-29.
+An earlier version of this rule matched `Data[1]|contains` through
+`Data[8]|contains` on the (incorrect) assumption that those are real,
+independently-addressable Sigma field names; that version fired 0/4
+times against this same file. The current version matches the flat
+`Data|contains: ntds.dit` field instead (same selector the builtin
+`win_esent_ntdsutil_abuse.yml` uses) and was confirmed to fire 4/4 times.
 
-Application-log ESENT Event ID 326, `ntds.dit` path in `Data[5]` — the
-real field shape confirmed against `dc_applog_ntdsutil_dfir_325_326_327.evtx`
-(EVTX-ATTACK-SAMPLES corpus) that the flat-`Data`-field builtin rule
-(`win_esent_ntdsutil_abuse.yml`) cannot match:
+## Positive (must match) — confirmed firing
+
+All 4 real events in the sample file match and produce a detection:
 
 ```
 Channel:       Application
 Provider_Name: ESENT
-EventID:       326
-Data[1]:       NTDS
-Data[2]:       3392
-Data[4]:       1
-Data[5]:       C:\$SNAP_201911270054_VOLUMEC$\Windows\NTDS\ntds.dit
-Data[6]:       0
+EventID:       326, RecordID 1969, Data: ... C:\$SNAP_201911270054_VOLUMEC$\Windows\NTDS\ntds.dit ...
+EventID:       325, RecordID 1970, Data: ... C:\Users\bob\Desktop\test\Folder\ntds\Active Directory\ntds.dit ...
+EventID:       327, RecordID 1971, Data: ... C:\Users\bob\Desktop\test\Folder\ntds\Active Directory\ntds.dit ...
+EventID:       327, RecordID 1972, Data: ... C:\$SNAP_201911270054_VOLUMEC$\Windows\NTDS\ntds.dit ...
 ```
 
 `application` matches (`Channel: Application`); `selection_eid` matches
-(`Provider_Name: ESENT`, `EventID: 326`); `selection_path` matches (`Data[5]`
-contains `ntds.dit`) → all three true → rule fires.
-
-## Positive (must match)
-
-Event ID 325, `ntds.dit` path written to a non-default, user-writable
-location — the more suspicious of the two paths seen in the sample data:
-
-```
-Channel:       Application
-Provider_Name: ESENT
-EventID:       325
-Data[1]:       NTDS
-Data[2]:       3392
-Data[4]:       2
-Data[5]:       C:\Users\bob\Desktop\test\Folder\ntds\Active Directory\ntds.dit
-Data[6]:       0
-```
-
-All three selections match → rule fires.
-
-## Positive (must match)
-
-Event ID 327 (the "completed" event of the same operation) — confirms the
-rule fires across all four documented event IDs, not just one:
-
-```
-Channel:       Application
-Provider_Name: ESENT
-EventID:       327
-Data[1]:       NTDS
-Data[5]:       C:\$SNAP_201911270054_VOLUMEC$\Windows\NTDS\ntds.dit
-```
-
-`selection_eid` matches (`EventID: 327` is in the list) → rule fires.
+(`Provider_Name: ESENT`, `EventID` in `216/325/326/327`); `selection_path`
+matches (`Data` contains `ntds.dit`) → rule fires on all 4.
 
 ## Negative (must not match)
 
@@ -65,11 +37,10 @@ event that also uses these event IDs:
 Channel:       Application
 Provider_Name: ESENT
 EventID:       326
-Data[1]:       NTDS
-Data[5]:       C:\Windows\NTDS\edb.chk
+Data:          ... C:\Windows\NTDS\edb.chk ...
 ```
 
-`application` and `selection_eid` match, but no `Data[N]` contains
+`application` and `selection_eid` match, but `Data` does not contain
 `ntds.dit` → `selection_path` does not match → rule does not match.
 
 ## Negative (must not match)
@@ -81,7 +52,7 @@ tracks:
 Channel:       Application
 Provider_Name: ESENT
 EventID:       102
-Data[5]:       C:\Windows\NTDS\ntds.dit
+Data:          ... C:\Windows\NTDS\ntds.dit ...
 ```
 
 `selection_eid` does not match (`102` not in the EventID list) → rule
@@ -96,7 +67,7 @@ doesn't accidentally match on EventID/Data alone:
 Channel:       Application
 Provider_Name: MsiInstaller
 EventID:       326
-Data[5]:       C:\Windows\NTDS\ntds.dit
+Data:          ... C:\Windows\NTDS\ntds.dit ...
 ```
 
 `selection_eid` does not match (`Provider_Name` isn't `ESENT`) → rule
@@ -104,8 +75,8 @@ does not match.
 
 ## Known limitation (documented in `description`)
 
-`Data[1]` through `Data[8]` are checked defensively because the `ntds.dit`
-path's exact index is only empirically confirmed (index 5) for EventIDs
-325/326/327, from the one available sample file. EventID 216 was not
-independently sampled — if its parameter layout differs enough to push
-the path outside indices 1-8, this rule would still miss it.
+Because this rule now matches the same flat `Data|contains: ntds.dit`
+selector as the builtin `Ntdsutil Abuse` rule, it produces duplicate
+detections alongside it wherever both are loaded — it adds no detection
+coverage the builtin doesn't already provide. See the investigation
+report's assessment of whether to keep or remove this rule.

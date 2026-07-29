@@ -15,32 +15,27 @@ description: |
   or spawning a remote DCSync-style replication request — a live, offline
   credential-dumping vector (T1003.003).
 
-  This rule replaces hayabusa's builtin
-  sigma\builtin\application\esent\win_esent_ntdsutil_abuse.yml for this
-  event family: that rule matches `Data|contains: ntds.dit`, but the raw
-  Application-log EventData for these event IDs is exposed as several
-  separately-indexed fields (`Data[1]` .. `Data[8]`), not one combined
-  `Data` field — confirmed directly against a real sample
+  This rule is `related`-linked as `derived` from hayabusa's builtin
+  sigma\builtin\application\esent\win_esent_ntdsutil_abuse.yml, which
+  covers the same event family via `Data|contains: ntds.dit`. An earlier
+  version of this rule claimed the builtin's flat `Data|contains` match
+  was a structural false negative against this event family's
+  actually-indexed `Data[1]`..`Data[8]` EventData fields, and replaced it
+  with per-index `Data[N]|contains` selectors. That claim was wrong:
+  verified directly against a real sample
   (dc_applog_ntdsutil_dfir_325_326_327.evtx from the EVTX-ATTACK-SAMPLES
-  corpus), where the `ntds.dit` path appears in `Data[5]`:
-  `Data[1]: NTDS ¦ Data[2]: 3392 ¦ Data[3]: ¦ Data[4]: 1 ¦ Data[5]:
-  C:\$SNAP_...\Windows\NTDS\ntds.dit ¦ Data[6]: 0 ¦ ...`. hayabusa's own
-  config/data_mapping/Application_1022-1033_MSI-Install.yaml confirms
-  `Data[N]` is the expected reference form for this kind of unnamed,
-  positional EventData; config/eventkey_alias.txt has no alias that
-  collapses `Data[1..N]` back into a flat `Data` field. The builtin
-  rule's condition can therefore never match this event family — a
-  structural false negative, not an edge case. This was found while
-  investigating a real sample of this technique that the builtin rule
-  missed (see investigation report, 2026-07-29).
+  corpus), hayabusa's `contains` modifier against the flat `Data` field
+  already matches across all of an event's indexed `Data[N]` values, so
+  the builtin rule fires correctly; `Data[N]` are not independently
+  addressable Sigma field names in hayabusa's engine (they are display
+  labels hayabusa's CSV/search renderer invents for an unnamed,
+  multi-value field), so the per-index selectors matched nothing and this
+  rule fired zero times against real data (see investigation report,
+  2026-07-29 correction). This version matches the builtin's flat
+  `Data|contains: ntds.dit` selector instead and has been re-verified to
+  fire on the same sample.
 
-  Because the exact parameter position isn't independently confirmed for
-  EventID 216 (no sample of that specific ID was available), this rule
-  checks `Data[1]` through `Data[8]` rather than assuming index 5 always
-  holds the path, trading a little rule verbosity for robustness against
-  a shifted index on a different event ID or Windows version.
-
-  Severity: medium, matching the builtin rule it replaces — this event
+  Severity: medium, matching the builtin rule it's derived from — this event
   fires for both malicious `ntdsutil` IFM extraction and for legitimate
   AD backup tooling that uses the same IFM mechanism, so it needs human
   triage (calling account, destination path, whether a backup job was
@@ -68,14 +63,7 @@ detection:
       - 326
       - 327
   selection_path:
-    - Data[1]|contains: ntds.dit
-    - Data[2]|contains: ntds.dit
-    - Data[3]|contains: ntds.dit
-    - Data[4]|contains: ntds.dit
-    - Data[5]|contains: ntds.dit
-    - Data[6]|contains: ntds.dit
-    - Data[7]|contains: ntds.dit
-    - Data[8]|contains: ntds.dit
+    Data|contains: ntds.dit
   condition: application and selection_eid and selection_path
 falsepositives:
   - Legitimate Active Directory backup operations (Windows Server Backup,
