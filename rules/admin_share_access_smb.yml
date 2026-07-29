@@ -1,0 +1,65 @@
+title: SMB Access To Administrative Share
+id: 6e9cb56f-badf-4f06-a406-ae744c290dd2
+related:
+  - id: 37b219bc-37bb-1261-f179-64307c1a1829
+    type: derived
+status: experimental
+description: |
+  Detects access to a Windows administrative share (`ADMIN$`, or a
+  drive-letter share like `C$`/`D$`) via Event ID 5140 ("A network share
+  object was accessed"). Administrative shares are the transport for the
+  classic Windows lateral-movement chain — PsExec-style remote service
+  execution, `net use \\target\C$`, remote SAM/SECURITY hive access over
+  the winreg RPC interface — because they expose the full local
+  filesystem/registry over SMB to anyone with local admin rights on the
+  target (T1021.002).
+
+  This rule replaces the hayabusa builtin
+  sigma\builtin\security\win_security_admin_share_access.yml for this
+  exact event: that rule's `selection` uses an *exact* match,
+  `ShareName: Admin$`, but the real Event ID 5140 `ShareName` field is
+  formatted as `\\*\ADMIN$` (confirmed by the neighboring builtin 5145
+  rule's own filter, `ShareName: '\\*\IPC$'`, and by
+  win_security_smb_file_creation_admin_shares.yml correctly using
+  `ShareName|endswith: C$` for the same field on the same event family).
+  An exact match against that field structurally can never equal
+  `Admin$` — this is a permanent false negative, not an edge case, and it
+  also only ever covered `ADMIN$`, never the drive-letter admin shares
+  (`C$`, `D$`, ...) that are just as commonly abused.
+
+  Severity: medium, because access to an administrative share is a
+  necessary precondition for several lateral-movement techniques but is
+  also extremely common in ordinary enterprise administration (patch
+  management, EDR/backup agents, remote helpdesk tooling) — this rule is
+  a pivot/context signal, not a standalone confirmed-compromise
+  indicator, matching the same severity as the builtin rule it replaces.
+references:
+  - https://attack.mitre.org/techniques/T1021/002/
+  - https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-5140
+author: mcp-hayabusa
+date: 2026-07-29
+tags:
+  - attack.lateral-movement
+  - attack.t1021.002
+logsource:
+  product: windows
+  service: security
+detection:
+  security:
+    Channel: Security
+  selection:
+    EventID: 5140
+  selection_admin_share:
+    ShareName|re: '\\\\\*\\(ADMIN\$|[A-Za-z]\$)$'
+  filter_main_computer_account:
+    SubjectUserName|endswith: $
+  condition: security and (selection and selection_admin_share and not 1 of filter_*)
+falsepositives:
+  - Legitimate remote administration or management tooling (Group
+    Policy, SCCM, EDR/backup agents, patch management) that routinely
+    accesses administrative shares as part of normal operation.
+  - Help desk or IT staff performing authorized remote troubleshooting.
+  - Requires the advanced audit policy "Object Access > Audit File
+    Share" to be configured for Success/Failure — not enabled by
+    default.
+level: medium

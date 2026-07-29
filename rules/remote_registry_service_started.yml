@@ -1,0 +1,53 @@
+title: Remote Registry Service Started
+id: 1b82a11d-f4c2-4ba2-a901-245b84799e96
+status: experimental
+description: |
+  Detects the built-in "Remote Registry" service transitioning to a
+  running state (EventID 7036, Service Control Manager, System channel).
+  Remote Registry is disabled by default on modern Windows and must be
+  explicitly started — locally, or remotely via `sc \\target start
+  RemoteRegistry` / equivalent RPC calls — before the winreg RPC
+  interface it hosts can be used to query or dump registry hives
+  (including SAM/SECURITY) over the network. Tool workflows for
+  Backup-Operator-privileged remote SAM dumping (Impacket's
+  secretsdump.py/reg.py registry method, CrackMapExec, and manual
+  `reg.exe save \\target\...`) all depend on this service running first,
+  making its start a low-noise, config-independent precursor signal for
+  T1003.002 activity — it does not require any object-access auditing or
+  SACL to be separately configured, unlike
+  win_security_sam_registry_hive_handle_request.yml.
+
+  Severity: medium, not high, because starting Remote Registry is not
+  itself malicious — legitimate remote administration tooling (Group
+  Policy, SCCM, some monitoring/inventory agents) starts it deliberately.
+  This rule is a pivot/context signal meant to be correlated against
+  subsequent registry access or privilege-use events, not a standalone
+  confirmed-compromise indicator.
+references:
+  - https://attack.mitre.org/techniques/T1003/002/
+  - https://learn.microsoft.com/en-us/troubleshoot/windows-server/system-management-components/configure-remote-access-registry-editing
+author: mcp-hayabusa
+date: 2026-07-28
+tags:
+  - attack.credential-access
+  - attack.t1003.002
+logsource:
+  product: windows
+  service: system
+detection:
+  selection:
+    Channel: System
+    EventID: 7036
+    Provider_Name: Service Control Manager
+    param1|contains: Remote Registry
+    # Note: param1/param2 are localized "Display Name"/state strings —
+    # this covers the default English OS install only.
+    param2: running
+  condition: selection
+falsepositives:
+  - Legitimate remote administration or management tooling (Group
+    Policy, SCCM, some monitoring/inventory agents) that deliberately
+    starts Remote Registry as part of its normal operation.
+  - Help desk or IT staff manually enabling Remote Registry for
+    authorized troubleshooting.
+level: medium

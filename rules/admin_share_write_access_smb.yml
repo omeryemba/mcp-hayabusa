@@ -1,0 +1,78 @@
+title: SMB Write Access To Administrative Share
+id: 11b64ebf-0968-456b-be90-cf89931311ad
+related:
+  - id: 37f5d188-182d-7a53-dca7-4bebbb6ce43e
+    type: derived
+status: experimental
+description: |
+  Detects a non-system account writing a file (AccessMask `0x2`) to a
+  Windows administrative share — `ADMIN$` or any drive-letter share
+  (`C$`, `D$`, ...) — via Event ID 5145 ("A network share object was
+  checked to see whether client can be granted desired access"). This is
+  the file-drop step of the classic PsExec-style lateral-movement chain:
+  an attacker with local admin rights on the target stages a payload
+  (service binary, DLL, script) over SMB before triggering it remotely
+  via the Service Control Manager, WMI, or a scheduled task (T1021.002).
+
+  This rule supplements two existing rules that each only see part of
+  this signal:
+  - hayabusa's builtin
+    sigma\builtin\security\win_security_smb_file_creation_admin_shares.yml
+    scopes its `ShareName` match to `|endswith: C$` only — a write to
+    `ADMIN$`, `D$`, or any other drive-letter admin share is a false
+    negative for that rule even though the technique is identical.
+  - hayabusa's builtin
+    hayabusa\builtin\Security\ObjectAccess\DetailedFileShare\Sec_5145_Info_NetShareFileAccess.yml
+    already sees all admin shares (it excludes only `IPC$`), but is
+    tagged only `attack.t1039`/`attack.collection` — it carries no
+    `attack.t1021.002` tag despite Event ID 5145 write access being
+    canonical telemetry for that technique, which understates T1021.002
+    coverage in any ATT&CK-tag-based analysis.
+
+  This rule closes both gaps at once: broadened `ShareName` matching
+  (any admin share, not just `C$`) plus an explicit `attack.t1021.002`
+  tag alongside the existing `attack.t1039`/`attack.collection`
+  classification.
+
+  Severity: high, because a write to an administrative share by a
+  non-system account is a strong, fairly specific lateral-movement
+  staging signal — legitimate uses exist (see false positives) but this
+  is not routine, everyday activity the way plain share *access* (Event
+  ID 5140) is.
+references:
+  - https://attack.mitre.org/techniques/T1021/002/
+  - https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-5145
+  - https://github.com/OTRF/ThreatHunter-Playbook/blob/f7a58156dbfc9b019f17f638b8c62d22e557d350/playbooks/WIN-201012004336.yaml
+author: mcp-hayabusa
+date: 2026-07-29
+tags:
+  - attack.lateral-movement
+  - attack.collection
+  - attack.t1021.002
+  - attack.t1039
+logsource:
+  product: windows
+  service: security
+detection:
+  security:
+    Channel: Security
+  selection:
+    EventID: 5145
+    AccessMask: '0x2'
+  selection_admin_share:
+    ShareName|re: '\\\\\*\\(ADMIN\$|[A-Za-z]\$)$'
+  filter_main_subjectusername:
+    SubjectUserName|endswith: $
+  filter_optional_local_ip:
+    IpAddress: ::1
+  condition: security and (selection and selection_admin_share and not 1 of filter_main_* and not 1 of filter_optional_*)
+falsepositives:
+  - Legitimate software deployment, patch management, or endpoint agent
+    tooling (SCCM, EDR/AV updates, backup agents) that writes files to
+    administrative shares as part of normal operation.
+  - Help desk or IT staff copying files during authorized remote
+    troubleshooting or maintenance.
+  - Requires the advanced audit policy "Object Access > Audit Detailed
+    File Share" to be configured for Success/Failure — not enabled by
+    default.
+level: high

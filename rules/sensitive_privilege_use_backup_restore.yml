@@ -1,0 +1,63 @@
+title: Sensitive Backup or Restore Privilege Used
+id: e200401c-54a1-40c8-afd2-7aabacd93467
+status: experimental
+description: |
+  Detects Event ID 4673 ("A privileged service was called") where the
+  PrivilegeList includes SeBackupPrivilege or SeRestorePrivilege. These
+  privileges let the calling account bypass normal DACL checks entirely —
+  granted by default to the built-in Backup Operators group, and the
+  mechanism that Impacket's secretsdump.py/reg.py registry method,
+  crackmapexec, diskshadow, and wbadmin's registry backup path all rely on
+  to read the SAM/SECURITY/SYSTEM hives (and NTDS.dit) without needing
+  local admin rights on the target (T1003.002).
+
+  This is the only rule in this set that detects the credential-dumping
+  mechanism itself rather than one specific tool's invocation of it: it
+  fires whether the privilege was exercised locally (reg.exe save) or
+  remotely over the winreg RPC interface with no process ever created on
+  the target (the fileless vector that the process-creation-based
+  registry_save_sam_hive_reg_exe.yml rule cannot see), and unlike
+  win_security_sam_registry_hive_handle_request.yml (EventID 4656 on the
+  SAM key), it does not depend on a SACL being manually configured on the
+  target registry key — a prerequisite that is not present by default.
+
+  Severity: high, because a successful use of these privileges against
+  credential-bearing hives means the material is very likely already
+  extracted with no further access required; not critical because
+  legitimate backup software exercises these same privileges constantly
+  as part of normal operation, so a human must correlate the calling
+  process/account against known backup jobs before escalating.
+references:
+  - https://attack.mitre.org/techniques/T1003/002/
+  - https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4673
+  - https://learn.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/audit-the-use-of-backup-and-restore-privilege
+author: mcp-hayabusa
+date: 2026-07-28
+tags:
+  - attack.credential-access
+  - attack.t1003.002
+logsource:
+  product: windows
+  service: security
+detection:
+  selection:
+    EventID: 4673
+    PrivilegeList|contains:
+      - SeBackupPrivilege
+      - SeRestorePrivilege
+  condition: selection
+falsepositives:
+  - Legitimate backup software (Windows Server Backup, VSS-based agents,
+    Veeam, SCCM/DPM, etc.) invoking backup or restore privileges as part
+    of a scheduled or on-demand backup job — correlate the calling
+    process image against known backup tooling before escalating.
+  - Administrators performing an authorized registry hive export or
+    system-state backup for troubleshooting, migration, or disaster
+    recovery.
+  - This event is only generated if the environment has separately
+    enabled the "Audit the use of Backup and Restore privilege" security
+    option — Windows suppresses SeBackupPrivilege/SeRestorePrivilege from
+    Sensitive Privilege Use auditing by default even when that audit
+    subcategory is otherwise turned on. Verify this policy is configured
+    before relying on this rule for coverage.
+level: high
