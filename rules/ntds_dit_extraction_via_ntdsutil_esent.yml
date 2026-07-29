@@ -1,0 +1,86 @@
+title: NTDS.dit Extraction Via Ntdsutil (ESENT Application Log)
+id: b4c5306d-8934-4d00-a41b-5563b36cf0cb
+related:
+  - id: b8d0d560-906d-670f-cd10-32ed9179f21a
+    type: derived
+status: experimental
+description: |
+  Detects `ntdsutil`'s Install-From-Media (IFM) backup path writing a copy
+  of the Active Directory database (`ntds.dit`) to disk, via the ESENT
+  provider's Application-log diagnostic events (216/325/326/327) that Jet/
+  ESENT emits for NTDS backup/restore/snapshot operations. `ntdsutil "ac i
+  ntds" "ifm" "create full <path>"` is a standard, well-documented way to
+  extract the entire AD database (plus the SYSTEM registry hive needed to
+  decrypt it) without ever touching NTDS.dit's normal file-locked location
+  or spawning a remote DCSync-style replication request — a live, offline
+  credential-dumping vector (T1003.003).
+
+  This rule replaces hayabusa's builtin
+  sigma\builtin\application\esent\win_esent_ntdsutil_abuse.yml for this
+  event family: that rule matches `Data|contains: ntds.dit`, but the raw
+  Application-log EventData for these event IDs is exposed as several
+  separately-indexed fields (`Data[1]` .. `Data[8]`), not one combined
+  `Data` field — confirmed directly against a real sample
+  (dc_applog_ntdsutil_dfir_325_326_327.evtx from the EVTX-ATTACK-SAMPLES
+  corpus), where the `ntds.dit` path appears in `Data[5]`:
+  `Data[1]: NTDS ¦ Data[2]: 3392 ¦ Data[3]: ¦ Data[4]: 1 ¦ Data[5]:
+  C:\$SNAP_...\Windows\NTDS\ntds.dit ¦ Data[6]: 0 ¦ ...`. hayabusa's own
+  config/data_mapping/Application_1022-1033_MSI-Install.yaml confirms
+  `Data[N]` is the expected reference form for this kind of unnamed,
+  positional EventData; config/eventkey_alias.txt has no alias that
+  collapses `Data[1..N]` back into a flat `Data` field. The builtin
+  rule's condition can therefore never match this event family — a
+  structural false negative, not an edge case. This was found while
+  investigating a real sample of this technique that the builtin rule
+  missed (see investigation report, 2026-07-29).
+
+  Because the exact parameter position isn't independently confirmed for
+  EventID 216 (no sample of that specific ID was available), this rule
+  checks `Data[1]` through `Data[8]` rather than assuming index 5 always
+  holds the path, trading a little rule verbosity for robustness against
+  a shifted index on a different event ID or Windows version.
+
+  Severity: medium, matching the builtin rule it replaces — this event
+  fires for both malicious `ntdsutil` IFM extraction and for legitimate
+  AD backup tooling that uses the same IFM mechanism, so it needs human
+  triage (calling account, destination path, whether a backup job was
+  scheduled) rather than being treated as confirmed-malicious on its own.
+references:
+  - https://attack.mitre.org/techniques/T1003/003/
+  - https://twitter.com/mgreen27/status/1558223256704122882
+  - https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/jj574207(v=ws.11)
+author: mcp-hayabusa
+date: 2026-07-29
+tags:
+  - attack.credential-access
+  - attack.t1003.003
+logsource:
+  product: windows
+  service: application
+detection:
+  application:
+    Channel: Application
+  selection_eid:
+    Provider_Name: ESENT
+    EventID:
+      - 216
+      - 325
+      - 326
+      - 327
+  selection_path:
+    - Data[1]|contains: ntds.dit
+    - Data[2]|contains: ntds.dit
+    - Data[3]|contains: ntds.dit
+    - Data[4]|contains: ntds.dit
+    - Data[5]|contains: ntds.dit
+    - Data[6]|contains: ntds.dit
+    - Data[7]|contains: ntds.dit
+    - Data[8]|contains: ntds.dit
+  condition: application and selection_eid and selection_path
+falsepositives:
+  - Legitimate Active Directory backup operations (Windows Server Backup,
+    third-party AD backup/DR tooling) that use ntdsutil's IFM mechanism as
+    part of a scheduled or on-demand backup job.
+  - Authorized AD database migration, offline analysis, or lab/test
+    environment setup that intentionally extracts an IFM snapshot.
+level: medium
