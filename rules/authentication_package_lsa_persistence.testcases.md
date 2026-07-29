@@ -1,5 +1,18 @@
 # Test cases: authentication_package_lsa_persistence
 
+An earlier version of this rule had no `Channel` selector at all, which
+caused hayabusa's channel filter to exclude every input file and disable
+the rule entirely (confirmed via `-v` output: `Evtx files loaded after
+channel filter: 0`, `Detection rules enabled after channel filter: 0`) —
+a guaranteed zero-detection rule regardless of real activity. Fixed by
+adding a `registry_event: {Channel: Microsoft-Windows-Sysmon/Operational}`
+selection block. Re-verified 2026-07-29 with a rule clone matching a real
+Sysmon EventID 13 SetValue sample (`\CurrentVersion\Run\360v` from
+`DE_timestomp_and_dll_sideloading_and_RunPersist.evtx`, EVTX-ATTACK-SAMPLES
+corpus): without the `Channel` block, 0/1; with it, 1/1. `TargetObject`
+and `EventType` were confirmed as correct, real field names for this
+event once the channel gate was in place — they were never the problem.
+
 ## Positive (must match)
 
 Sysmon Event ID 13 (RegistryEvent — Value Set), an attacker registering a
@@ -7,6 +20,7 @@ malicious authentication package DLL for persistent, SYSTEM-context
 execution inside lsass.exe on next boot:
 
 ```
+Channel:      Microsoft-Windows-Sysmon/Operational
 EventID:      13
 EventType:    SetValue
 TargetObject: HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Authentication Packages
@@ -14,8 +28,9 @@ Details:      msv1_0 C:\Windows\System32\evilauthpkg.dll
 Image:        C:\Windows\System32\reg.exe
 ```
 
+`registry_event` matches (`Channel: Microsoft-Windows-Sysmon/Operational`),
 `selection_target` matches `TargetObject` (ends with `\Control\Lsa\Authentication
-Packages`), `selection_type` matches `EventType: SetValue` → both selections true
+Packages`), `selection_type` matches `EventType: SetValue` → all three true
 → rule fires.
 
 ## Negative (must not match)
@@ -24,6 +39,7 @@ Sysmon Event ID 13 on an unrelated LSA registry value (Notification Packages),
 same event type, different target:
 
 ```
+Channel:      Microsoft-Windows-Sysmon/Operational
 EventID:      13
 EventType:    SetValue
 TargetObject: HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Notification Packages
@@ -40,6 +56,7 @@ Sysmon Event ID 12 (RegistryEvent — Key/Value Create/Delete) against the corre
 key, but the wrong event type — this rule intentionally scopes to `SetValue` only:
 
 ```
+Channel:      Microsoft-Windows-Sysmon/Operational
 EventID:      12
 EventType:    CreateKey
 TargetObject: HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Authentication Packages
@@ -48,6 +65,22 @@ Image:        C:\Windows\System32\services.exe
 
 `selection_target` matches, but `selection_type` does not (`EventType` is
 `CreateKey`, not `SetValue`) → condition requires both → rule does not fire.
+
+## Negative (must not match)
+
+Otherwise-matching event content, but from a channel other than the one this
+rule is scoped to — confirms the `registry_event` channel gate actually
+constrains matching rather than being decorative:
+
+```
+Channel:      Security
+EventID:      13
+EventType:    SetValue
+TargetObject: HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Authentication Packages
+```
+
+`registry_event` does not match (`Channel` isn't
+`Microsoft-Windows-Sysmon/Operational`) → rule does not fire.
 
 ## Known limitation (documented in `falsepositives`)
 

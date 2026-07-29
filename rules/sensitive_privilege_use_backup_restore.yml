@@ -15,8 +15,9 @@ description: |
   mechanism itself rather than one specific tool's invocation of it: it
   fires whether the privilege was exercised locally (reg.exe save) or
   remotely over the winreg RPC interface with no process ever created on
-  the target (the fileless vector that the process-creation-based
-  registry_save_sam_hive_reg_exe.yml rule cannot see), and unlike
+  the target (a fileless vector that hayabusa's builtin
+  proc_creation_win_reg_dumping_sensitive_hives.yml, a process-creation
+  rule, cannot see), and unlike
   win_security_sam_registry_hive_handle_request.yml (EventID 4656 on the
   SAM key), it does not depend on a SACL being manually configured on the
   target registry key — a prerequisite that is not present by default.
@@ -27,6 +28,15 @@ description: |
   legitimate backup software exercises these same privileges constantly
   as part of normal operation, so a human must correlate the calling
   process/account against known backup jobs before escalating.
+
+  Correction (2026-07-29): the initial version of this rule had no
+  `Channel` selector at all. Verified directly against hayabusa (`-v`
+  output showed `Evtx files loaded after channel filter: 0` even when
+  scanned against a 278-file corpus) that this causes hayabusa's channel
+  filter to exclude every input file and disable the rule entirely — a
+  guaranteed zero-detection rule regardless of real activity. Added the
+  `security` selection block below (`Channel: Security`, matching every
+  other Security-log rule in this project's set) to fix it.
 references:
   - https://attack.mitre.org/techniques/T1003/002/
   - https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4673
@@ -40,12 +50,14 @@ logsource:
   product: windows
   service: security
 detection:
+  security:
+    Channel: Security
   selection:
     EventID: 4673
     PrivilegeList|contains:
       - SeBackupPrivilege
       - SeRestorePrivilege
-  condition: selection
+  condition: security and selection
 falsepositives:
   - Legitimate backup software (Windows Server Backup, VSS-based agents,
     Veeam, SCCM/DPM, etc.) invoking backup or restore privileges as part

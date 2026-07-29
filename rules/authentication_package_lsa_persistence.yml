@@ -23,6 +23,18 @@ description: |
   custom authentication packages here, so a human should confirm the DLL
   named in the new value is not an expected, signed, vendor-installed
   component before escalating.
+
+  Correction (2026-07-29): the initial version of this rule had no
+  `Channel` selector anywhere in its detection logic. Verified directly
+  against hayabusa (`-v` output showed `Evtx files loaded after channel
+  filter: 0`) that this causes hayabusa's channel filter to exclude every
+  input file and disable the rule entirely — a guaranteed zero-detection
+  rule regardless of real activity. Every other working rule in this
+  project's set explicitly declares a `Channel` gate; this one didn't.
+  Added the `registry_event` selection block below (Sysmon's
+  `TargetObject`/`EventType` fields, confirmed as the correct field names
+  via a real sample, are only reachable once the channel is declared) and
+  re-verified firing 1/1 against a real Sysmon EventID 13 SetValue sample.
 references:
   - https://attack.mitre.org/techniques/T1547/002/
   - https://learn.microsoft.com/en-us/windows/win32/secauthn/authentication-packages
@@ -37,11 +49,13 @@ logsource:
   category: registry_event
   product: windows
 detection:
+  registry_event:
+    Channel: Microsoft-Windows-Sysmon/Operational
   selection_target:
     TargetObject|endswith: '\Control\Lsa\Authentication Packages'
   selection_type:
     EventType: SetValue
-  condition: selection_target and selection_type
+  condition: registry_event and selection_target and selection_type
 falsepositives:
   - Installation or reconfiguration of legitimate third-party authentication
     software that registers its own authentication package (e.g. smart-card
