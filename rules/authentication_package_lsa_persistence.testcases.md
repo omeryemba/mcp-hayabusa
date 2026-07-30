@@ -58,14 +58,13 @@ fixture: authentication_package_lsa_persistence__negative.evtx
 expect: no_fire
 ```
 
-Execution-test fixture note: this negative case is backed by a different
-real sample than the prose above (a Sysmon EventID 13 SetValue against
-`...\CurrentVersion\Run\360v`, `DE_timestomp_and_dll_sideloading_and_RunPersist.evtx`,
-EVTX-ATTACK-SAMPLES) rather than a literal `Notification Packages` write —
-no real sample of the latter was found in the corpus either. It still
-exercises the same logic this case documents (`selection_target` correctly
-not matching an unrelated `TargetObject`), so it's used as the real-data
-stand-in. See `tests/fixtures/evtx/PROVENANCE.md`.
+Execution-test fixture note: this negative case is backed by a real
+`Notification Packages` sample (`AutomatedTestingTools/PanacheSysmon_vs_AtomicRedTeam01.evtx`,
+EventRecordID 3632, EVTX-ATTACK-SAMPLES) — the exact scenario described
+above. An earlier version of this fixture used a different real sample
+(`...\CurrentVersion\Run\360v`) as a stand-in, from a time when no
+`Notification Packages` match had yet been found in the corpus; a later,
+more thorough search turned one up. See `tests/fixtures/evtx/PROVENANCE.md`.
 
 `selection_target` does not match (`TargetObject` doesn't end with `\Control\Lsa\
 Authentication Packages`) → rule does not fire.

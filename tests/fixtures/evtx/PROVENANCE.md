@@ -48,9 +48,9 @@ format allows), even where it contains a single record.
 
 ## authentication_package_lsa_persistence__negative.evtx
 
-- Source: `AutomatedTestingTools/Malware/DE_timestomp_and_dll_sideloading_and_RunPersist.evtx`, EventRecordID 6593 (Sysmon/13, `EventType: SetValue`, `TargetObject` ending `...\CurrentVersion\Run\360v`).
+- Source: `AutomatedTestingTools/PanacheSysmon_vs_AtomicRedTeam01.evtx`, EventRecordID 3632 (Sysmon/13, `EventType: SetValue`, `TargetObject` ending `...\Control\Lsa\Notification Packages`).
 - Rule: `authentication_package_lsa_persistence.yml` — expect: no_fire, confirmed 0/1.
-- Note: no real sample of the rule's actual target (`...\Control\Lsa\Authentication Packages`) exists anywhere in the EVTX-ATTACK-SAMPLES corpus (confirmed via a corpus-wide keyword search for both `360v` and `Authentication Packages` during curation) — this rule's **positive** case remains prose-only/unconfirmed, same as documented in the rule's own `status: test` history. This negative excerpt only exercises the "different `TargetObject`, same channel/event type" logic, using real data in place of the prose example's specific `Notification Packages` scenario.
+- Note: this is the exact `Notification Packages` scenario documented in the rule's `.testcases.md` negative case — an earlier version of this fixture stood in a different real sample (`...\CurrentVersion\Run\360v`) because a corpus-wide search at the time turned up no `Notification Packages` match; a later, more thorough search (2026-07-30) found this one. No real sample of the rule's actual **positive** target (`...\Control\Lsa\Authentication Packages`) exists anywhere in the EVTX-ATTACK-SAMPLES corpus (confirmed via exact-phrase, broad-keyword, and regex searches covering all 278 files) — that case remains prose-only/unconfirmed, same as documented in the rule's own `status: test` history.
 
 ## remote_registry_service_started__negative.evtx
 
