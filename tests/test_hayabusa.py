@@ -154,6 +154,16 @@ def test_eid_metrics_missing_output_returns_empty(tmp_path, monkeypatch):
     assert result["truncated"] is False
 
 
+def test_eid_metrics_failure_raises(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        hayabusa, "_run", lambda args, timeout_sec=600: FakeResult(returncode=1, stderr="boom")
+    )
+    monkeypatch.setattr(hayabusa, "_require_existing_path", lambda p, label="target": tmp_path)
+
+    with pytest.raises(RuntimeError):
+        hayabusa.eid_metrics(str(tmp_path))
+
+
 def test_extract_base64_parses_and_truncates(tmp_path, monkeypatch):
     def fake_run(args, timeout_sec=600):
         output_path = Path(args[args.index("-o") + 1])
@@ -186,6 +196,16 @@ def test_extract_base64_missing_output_returns_empty(tmp_path, monkeypatch):
     assert result["total_rows"] == 0
     assert result["rows"] == []
     assert result["truncated"] is False
+
+
+def test_extract_base64_failure_raises(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        hayabusa, "_run", lambda args, timeout_sec=600: FakeResult(returncode=1, stderr="boom")
+    )
+    monkeypatch.setattr(hayabusa, "_require_existing_path", lambda p, label="target": tmp_path)
+
+    with pytest.raises(RuntimeError):
+        hayabusa.extract_base64(str(tmp_path))
 
 
 def test_log_metrics_parses_and_truncates(tmp_path, monkeypatch):
@@ -222,6 +242,16 @@ def test_log_metrics_missing_output_returns_empty(tmp_path, monkeypatch):
     assert result["truncated"] is False
 
 
+def test_log_metrics_failure_raises(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        hayabusa, "_run", lambda args, timeout_sec=600: FakeResult(returncode=1, stderr="boom")
+    )
+    monkeypatch.setattr(hayabusa, "_require_existing_path", lambda p, label="target": tmp_path)
+
+    with pytest.raises(RuntimeError):
+        hayabusa.log_metrics(str(tmp_path))
+
+
 def test_computer_metrics_parses_and_truncates(tmp_path, monkeypatch):
     def fake_run(args, timeout_sec=600):
         output_path = Path(args[args.index("-o") + 1])
@@ -254,6 +284,16 @@ def test_computer_metrics_missing_output_returns_empty(tmp_path, monkeypatch):
     assert result["total_rows"] == 0
     assert result["rows"] == []
     assert result["truncated"] is False
+
+
+def test_computer_metrics_failure_raises(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        hayabusa, "_run", lambda args, timeout_sec=600: FakeResult(returncode=1, stderr="boom")
+    )
+    monkeypatch.setattr(hayabusa, "_require_existing_path", lambda p, label="target": tmp_path)
+
+    with pytest.raises(RuntimeError):
+        hayabusa.computer_metrics(str(tmp_path))
 
 
 def test_logon_summary_parses_both_files(tmp_path, monkeypatch):
@@ -774,18 +814,14 @@ def test_search_does_not_pass_wizard_flag(tmp_path, monkeypatch):
     assert "-w" not in captured["args"]
 
 
-def test_search_missing_output_returns_empty(tmp_path, monkeypatch):
+def test_search_failure_raises(tmp_path, monkeypatch):
     monkeypatch.setattr(
         hayabusa, "_run", lambda args, timeout_sec=600: FakeResult(returncode=1, stderr="boom")
     )
     monkeypatch.setattr(hayabusa, "_require_existing_path", lambda p, label="target": tmp_path)
 
-    result = hayabusa.search(str(tmp_path), ["needle"])
-
-    assert result["total_rows"] == 0
-    assert result["returned_rows"] == 0
-    assert result["rows"] == []
-    assert result["truncated"] is False
+    with pytest.raises(RuntimeError):
+        hayabusa.search(str(tmp_path), ["needle"])
 
 
 def _patch_scan_evtx_wrappers(monkeypatch, tmp_path, detection_rows=None):

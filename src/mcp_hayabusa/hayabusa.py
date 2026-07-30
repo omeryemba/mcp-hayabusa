@@ -343,6 +343,8 @@ def eid_metrics(
         ]
 
         result = _run(args, timeout_sec=timeout_sec)
+        if result.returncode != 0:
+            raise RuntimeError(f"hayabusa eid-metrics failed: {result.stderr}")
 
         rows: list[dict] = []
         total = 0
@@ -382,6 +384,8 @@ def extract_base64(
         ]
 
         result = _run(args, timeout_sec=timeout_sec)
+        if result.returncode != 0:
+            raise RuntimeError(f"hayabusa extract-base64 failed: {result.stderr}")
 
         rows: list[dict] = []
         total = 0
@@ -421,6 +425,8 @@ def log_metrics(
         ]
 
         result = _run(args, timeout_sec=timeout_sec)
+        if result.returncode != 0:
+            raise RuntimeError(f"hayabusa log-metrics failed: {result.stderr}")
 
         rows: list[dict] = []
         total = 0
@@ -460,6 +466,8 @@ def computer_metrics(
         ]
 
         result = _run(args, timeout_sec=timeout_sec)
+        if result.returncode != 0:
+            raise RuntimeError(f"hayabusa computer-metrics failed: {result.stderr}")
 
         rows: list[dict] = []
         total = 0
@@ -695,6 +703,8 @@ def search(
             args += [flag, keyword]
 
         result = _run(args, timeout_sec=timeout_sec)
+        if result.returncode != 0:
+            raise RuntimeError(f"hayabusa search failed: {result.stderr}")
 
         rows: list[dict] = []
         total = 0
