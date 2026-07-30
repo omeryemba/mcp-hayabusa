@@ -17,12 +17,28 @@ description: |
   unlisted EDR/diagnostic tooling in environments this rule wasn't tuned for, so a
   human should confirm SourceImage legitimacy before treating a hit as confirmed
   compromise.
+
+  Correction (2026-07-30): the initial version of this example had no `Channel`
+  selector anywhere in its detection logic. Verified directly against hayabusa
+  (`-v` output showed `Evtx files loaded after channel filter: 0`) that this
+  causes hayabusa's channel filter to exclude every input file and disable the
+  rule entirely — a guaranteed zero-detection rule regardless of real activity.
+  This is the same structural defect that shipped in three of this project's
+  real custom rules before being caught, which is exactly why it matters that
+  the *example this skill points people to* not model it: every rule's
+  `detection:` block needs an explicit `Channel`/`EventID` mapping (here,
+  `process_access`) ANDed into `condition:` — `logsource.category` alone does
+  not make hayabusa infer one. Added the block below and re-verified firing 1/1
+  against a real Sysmon EventID 10 sample (`PowerShell → lsass.exe`,
+  `GrantedAccess: 0x1010`, from `PanacheSysmon_vs_AtomicRedTeam01.evtx`,
+  EVTX-ATTACK-SAMPLES corpus).
 references:
   - https://attack.mitre.org/techniques/T1003/001/
   - https://learn.microsoft.com/en-us/sysinternals/downloads/procdump
   - https://web.archive.org/web/20191227142832/https://blog.f-secure.com/hunting-for-lsass-process-dumping/
 author: mcp-hayabusa
 date: 2026-07-25
+modified: 2026-07-30
 tags:
   - attack.credential-access
   - attack.t1003.001
@@ -30,6 +46,9 @@ logsource:
   category: process_access
   product: windows
 detection:
+  process_access:
+    Channel: Microsoft-Windows-Sysmon/Operational
+    EventID: 10
   selection_target:
     TargetImage|endswith: '\lsass.exe'
   selection_access:
@@ -51,7 +70,7 @@ detection:
       - '\svchost.exe'
       - '\wininit.exe'
       - '\services.exe'
-  condition: selection_target and selection_access and not filter_known_benign_sources
+  condition: process_access and selection_target and selection_access and not filter_known_benign_sources
 falsepositives:
   - Endpoint protection / EDR agents (Defender, CrowdStrike, SentinelOne, etc.) that
     are not covered by 'filter_known_benign_sources' in this environment's specific
