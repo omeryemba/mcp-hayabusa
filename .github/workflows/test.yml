@@ -65,3 +65,56 @@ jobs:
           for rule in rules/*.yml; do
             python .claude/skills/detection-engineering/scripts/validate-rule.py "$rule"
           done
+
+  validate-rule-execution:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install mcp-hayabusa
+        run: pip install -e .
+
+      - name: Install hayabusa binary
+        env:
+          # Pinned to the exact version tests/fixtures/evtx/ was curated and
+          # verified against (see tests/fixtures/evtx/PROVENANCE.md). Bump
+          # deliberately, alongside re-verifying the fixtures, not casually --
+          # a hayabusa upgrade can change matching behavior (see the "Hayabusa
+          # version drift" risk noted for this runner).
+          HAYABUSA_VERSION: "3.10.0"
+        run: |
+          set -e
+          curl -sSL -o hayabusa.zip \
+            "https://github.com/Yamato-Security/hayabusa/releases/download/v${HAYABUSA_VERSION}/hayabusa-${HAYABUSA_VERSION}-lin-x64-gnu.zip"
+          # hayabusa resolves config/default_profile.yaml, config/profiles.yaml,
+          # and rules/config/* (windash_characters.txt, level_tuning.txt, etc.)
+          # relative to its own executable's directory at startup, regardless of
+          # the -r rules path passed on the command line -- so both trees must
+          # be extracted alongside the binary, not just the binary itself.
+          unzip -q hayabusa.zip \
+            "hayabusa-${HAYABUSA_VERSION}-lin-x64-gnu" \
+            "config/*" \
+            "rules/config/*"
+          chmod +x "hayabusa-${HAYABUSA_VERSION}-lin-x64-gnu"
+          echo "HAYABUSA_BIN=$PWD/hayabusa-${HAYABUSA_VERSION}-lin-x64-gnu" >> "$GITHUB_ENV"
+
+      - name: Confirm fixtures are present
+        run: |
+          set -e
+          shopt -s nullglob
+          fixtures=(tests/fixtures/evtx/*.evtx)
+          if [ ${#fixtures[@]} -eq 0 ]; then
+            echo "::error::No .evtx fixtures found under tests/fixtures/evtx/ -- execution tests would silently skip everything instead of actually verifying rules."
+            exit 1
+          fi
+          echo "Found ${#fixtures[@]} fixture(s):"
+          printf '  %s\n' "${fixtures[@]##*/}"
+
+      - name: Run execution-based rule tests
+        run: python .claude/skills/detection-engineering/scripts/validate-rule-execution.py rules/

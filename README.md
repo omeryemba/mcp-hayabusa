@@ -98,7 +98,7 @@ This does *not* apply to `validate-rule-execution.py` below, which is a separate
 This project's custom Sigma rules under `rules/` are checked two ways:
 
 - **`validate-rule.py`** (`.claude/skills/detection-engineering/scripts/validate-rule.py`) — metadata-only: ATT&CK tag, `level`, `falsepositives`, and that a sibling `.testcases.md` file exists. Needs only `pyyaml`, no real binary. Runs in CI (`validate-rules` job).
-- **`validate-rule-execution.py`** (`.claude/skills/detection-engineering/scripts/validate-rule-execution.py`) — actually runs each rule against a real `.evtx` fixture via a real `hayabusa` binary and checks it fires/doesn't fire as documented in machine-readable ` ```yaml ` blocks embedded in the rule's `.testcases.md`. Requires the `mcp_hayabusa` package installed (`pip install -e .`) and a real `hayabusa` binary on `PATH`/`HAYABUSA_BIN`. **Not currently wired into CI** — run it manually before treating a rule change as done:
+- **`validate-rule-execution.py`** (`.claude/skills/detection-engineering/scripts/validate-rule-execution.py`) — actually runs each rule against a real `.evtx` fixture via a real `hayabusa` binary and checks it fires/doesn't fire as documented in machine-readable ` ```yaml ` blocks embedded in the rule's `.testcases.md`. Requires the `mcp_hayabusa` package installed (`pip install -e .`) and a real `hayabusa` binary on `PATH`/`HAYABUSA_BIN`. Runs in CI (`validate-rule-execution` job, which downloads a pinned hayabusa binary), but you can also run it locally before treating a rule change as done:
 
   ```bash
   python .claude/skills/detection-engineering/scripts/validate-rule-execution.py rules/

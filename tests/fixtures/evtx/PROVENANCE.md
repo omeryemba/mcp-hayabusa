@@ -14,6 +14,14 @@ the target rule against the resulting file with a real `hayabusa` binary
 before being committed — every hit count below is a confirmed, reproduced
 result, not a carried-over claim from a past investigation.
 
+The hayabusa version these hit counts are verified against is the
+`HAYABUSA_VERSION` pin in `.github/workflows/test.yml`'s
+`validate-rule-execution` job (currently `3.10.0`), which re-runs every
+rule against these fixtures on every CI run. Bump the two together: if
+you change `HAYABUSA_VERSION`, re-run `validate-rule-execution.py`
+locally against these fixtures first and update any hit counts below
+that shift before committing the version bump.
+
 `.evtx`'s chunk-based format has a fixed per-file overhead regardless of
 how few events it holds — every file below is 68 KiB (the minimum this
 format allows), even where it contains a single record.

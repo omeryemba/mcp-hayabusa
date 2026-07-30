@@ -21,9 +21,10 @@ directory in this repo.
 
 This script requires the mcp_hayabusa package to be installed
 (`pip install -e .`) and a real hayabusa binary on PATH or via
-HAYABUSA_BIN -- unlike validate-rule.py, which only needs pyyaml. It is
-not currently wired into CI (see SKILL.md); run it manually before
-treating a rule change as done.
+HAYABUSA_BIN -- unlike validate-rule.py, which only needs pyyaml. It runs
+in CI (the validate-rule-execution job in .github/workflows/test.yml,
+which installs a pinned hayabusa binary); you can also run it manually
+for faster feedback before treating a rule change as done.
 
 Prints a JSON report to stdout. Exit codes:
     0 - every rule's cases passed (no failures, errors, or skips)
