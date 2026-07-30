@@ -1,28 +1,46 @@
 # Test cases: admin_share_write_access_smb
 
+An earlier version of this rule matched an exact `AccessMask: '0x2'`,
+copied from the builtin it's derived from. Confirmed against real
+EVTX-ATTACK-SAMPLES EID 5145 events (RemCom/renamed-PsExec/Backup-
+Operator-privilege corpus samples) that this misses nearly every real
+write: Windows almost always logs a combined mask (`0x120196`, `0x3`,
+`0x83`, `0x12019f` were all observed) with the `FILE_WRITE_DATA` bit
+(bit 1) set alongside other granted rights, not a bare `0x2`. Fixed by
+replacing the exact match with `AccessMask|re: '[2367abABEF]$'`, which
+tests only the low nibble's bit 1 — matching any mask ending in a hex
+digit that has that bit set (`2,3,6,7,A,B,E,F`), independent of higher
+bits. Re-verified 2026-07-30: this rule went from 0 hits to 14 hits
+against the real corpus (10 with combined masks like `0x120196`, 4 with
+the bare `0x2` this rule already caught), correctly still excluding
+every read-only (`0x1`-family) event.
+
 ## Positive (must match)
 
 Security Event ID 5145, a non-system account writing a file to `ADMIN$`
-— the gap the `C$`-only builtin rule
-(`win_security_smb_file_creation_admin_shares.yml`) misses entirely:
+with a real-world combined access mask (`0x120196` — READ_CONTROL,
+SYNCHRONIZE, WRITE_DATA, APPEND_DATA, WRITE_EA, READ_ATTRIBUTES,
+WRITE_ATTRIBUTES) — the exact pattern the earlier exact-`0x2` match
+missed on every real sample tested:
 
 ```
 Channel:          Security
 EventID:          5145
 ShareName:        \\*\ADMIN$
-AccessMask:       0x2
+AccessMask:       0x120196
 SubjectUserName:  jdoe
 IpAddress:        10.0.0.5
 ```
 
-`security`/`selection` match (`EventID: 5145`, `AccessMask: 0x2`);
-`selection_admin_share` matches (`\ADMIN$`); neither filter applies →
-rule fires.
+`security`/`selection` match (`EventID: 5145`, `AccessMask` ends in `6`,
+which is in `[2367abABEF]`); `selection_admin_share` matches (`\ADMIN$`);
+neither filter applies → rule fires.
 
 ## Positive (must match)
 
-Same write, `C$` — the case the builtin rule already covers, kept here
-to confirm this rule doesn't regress it:
+Bare `AccessMask: 0x2` — the literal value the original rule checked
+for, confirmed still caught by the fixed regex (also seen for real in
+this corpus, alongside `0x120196`, on the same host/share):
 
 ```
 Channel:          Security
@@ -33,7 +51,7 @@ SubjectUserName:  jdoe
 IpAddress:        10.0.0.5
 ```
 
-All selections match → rule fires.
+All selections match (`AccessMask` ends in `2`) → rule fires.
 
 ## Negative (must not match)
 
@@ -48,8 +66,26 @@ AccessMask:       0x1
 SubjectUserName:  jdoe
 ```
 
-`selection` requires `AccessMask: 0x2` → does not match → rule does not
-match.
+`AccessMask` ends in `1`, not in `[2367abABEF]` → `selection` does not
+match → rule does not match.
+
+## Negative (must not match)
+
+A real-world combined mask that does *not* include the write bit
+(`0x100081` — SYNCHRONIZE, READ_ATTRIBUTES, READ_DATA — observed for
+real in this corpus alongside the genuine write events above) —
+confirms the regex fix doesn't over-match on "any non-trivial mask":
+
+```
+Channel:          Security
+EventID:          5145
+ShareName:        \\*\ADMIN$
+AccessMask:       0x100081
+SubjectUserName:  jdoe
+```
+
+`AccessMask` ends in `1`, not in `[2367abABEF]` → `selection` does not
+match → rule does not match.
 
 ## Negative (must not match)
 

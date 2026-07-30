@@ -5,8 +5,9 @@ related:
     type: derived
 status: experimental
 description: |
-  Detects a non-system account writing a file (AccessMask `0x2`) to a
-  Windows administrative share — `ADMIN$` or any drive-letter share
+  Detects a non-system account writing a file (an `AccessMask` with the
+  `FILE_WRITE_DATA` bit set) to a Windows administrative share —
+  `ADMIN$` or any drive-letter share
   (`C$`, `D$`, ...) — via Event ID 5145 ("A network share object was
   checked to see whether client can be granted desired access"). This is
   the file-drop step of the classic PsExec-style lateral-movement chain:
@@ -34,6 +35,24 @@ description: |
   tag alongside the existing `attack.t1039`/`attack.collection`
   classification.
 
+  Correction (2026-07-30): the initial version of this rule copied the
+  builtin's exact `AccessMask: '0x2'` match. Confirmed against real
+  EVTX-ATTACK-SAMPLES EID 5145 events that this is a false-negative-prone
+  pattern shared with the builtin: Windows almost never logs a bare `0x2`
+  for a genuine write — real write-access events carry combined masks
+  (`0x3`, `0x83`, `0x120196`, `0x12019f` were all observed in this
+  corpus) that include the `FILE_WRITE_DATA` bit (bit 1) alongside other
+  granted rights, and an exact match against `'0x2'` misses every one of
+  them. Sigma has no bitwise-AND modifier (confirmed against the current
+  spec's modifier list), so this is fixed using the same last-hex-digit
+  wildcard technique this project's installed builtin
+  `win_security_ad_user_enumeration.yml` already uses for an analogous
+  single-bit test: `AccessMask|re: '[2367abABEF]$'` matches any mask
+  whose low nibble has bit 1 set, independent of which other bits (higher
+  nibbles) are also set, since each hex nibble is an independent 4-bit
+  group. Verified upstream (`Yamato-Security/hayabusa-rules` `main`, as
+  of this fix) has not addressed this in the builtin rule.
+
   Severity: high, because a write to an administrative share by a
   non-system account is a strong, fairly specific lateral-movement
   staging signal — legitimate uses exist (see false positives) but this
@@ -58,7 +77,7 @@ detection:
     Channel: Security
   selection:
     EventID: 5145
-    AccessMask: '0x2'
+    AccessMask|re: '[2367abABEF]$'
   selection_admin_share:
     ShareName|re: '\\\\\*\\(ADMIN\$|[A-Za-z]\$)$'
   filter_main_subjectusername:
