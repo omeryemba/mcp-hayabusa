@@ -44,3 +44,24 @@ jobs:
 
       - name: Run mypy
         run: mypy
+
+  validate-rules:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install pyyaml
+
+      - name: Validate detection rules
+        run: |
+          set -e
+          for rule in rules/*.yml; do
+            python .claude/skills/detection-engineering/scripts/validate-rule.py "$rule"
+          done
