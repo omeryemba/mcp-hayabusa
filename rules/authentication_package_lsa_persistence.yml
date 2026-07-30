@@ -11,9 +11,12 @@ description: |
 
   This is the same LSA-registry-persistence pattern as the Security Support
   Provider technique (T1547.005) — same registry key, a neighboring value —
-  for which this rule set already has a dedicated, high-severity detection
-  (registry_event_ssp_added_lsa_config.yml). The Authentication Packages
-  value had no equivalent dedicated rule prior to this one.
+  for which hayabusa's builtin rule set already has a dedicated,
+  high-severity detection
+  (sigma\builtin\registry\registry_event\registry_event_ssp_added_lsa_config.yml).
+  The Authentication Packages value had no equivalent dedicated rule in
+  either this project's custom `rules/` or hayabusa's builtin set prior
+  to this one.
 
   Severity: high, because a successful write to this value grants an
   attacker persistent SYSTEM-context code execution with credential
