@@ -2,6 +2,12 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- `validate-rule-execution.py`, an execution-based test runner for this project's custom Sigma rules (`.claude/skills/detection-engineering/scripts/`), separate from the existing metadata-only `validate-rule.py` linter. Runs each rule against a real `.evtx` fixture via a real `hayabusa` binary and checks it fires/doesn't fire as documented in machine-readable YAML blocks embedded in the rule's `.testcases.md`. Ships with small, real, sourced-and-attributed fixtures under `tests/fixtures/evtx/` for all 5 custom rules (`tests/fixtures/evtx/PROVENANCE.md`), and a `HAYABUSA_SAMPLE_EVTX_DIR` override for pointing at a fuller local corpus. Not currently wired into CI — run manually; see README's "Custom Detection Rule Validation" section.
+
 ## [0.1.0] - 2026-07-23
 
 Initial release.

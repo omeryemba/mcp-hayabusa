@@ -14,6 +14,12 @@ ShareName:        \\*\ADMIN$
 SubjectUserName:  jdoe
 ```
 
+```yaml
+fixture: admin_share_access_smb.evtx
+expect: fires
+min_hits: 3
+```
+
 `security` and `selection` match on `EventID: 5140`; `selection_admin_share`
 matches (`ShareName` ends `\ADMIN$`); `filter_main_computer_account` does
 not apply (`jdoe` doesn't end in `$`) → rule fires.
@@ -44,6 +50,11 @@ Channel:          Security
 EventID:          5140
 ShareName:        \\*\IPC$
 SubjectUserName:  jdoe
+```
+
+```yaml
+fixture: admin_share_access_smb__negative.evtx
+expect: no_fire
 ```
 
 `selection_admin_share` does not match → rule does not match.

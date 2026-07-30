@@ -28,6 +28,17 @@ param1:        Windows Update
 param2:        running
 ```
 
+```yaml
+fixture: remote_registry_service_started__negative.evtx
+expect: no_fire
+```
+
+Execution-test fixture note: this negative case is backed by a real
+EID 7036 sample for a different service (`Windows Error Reporting Service`,
+not `Windows Update` as in the prose above) — `DE_WinEventLogSvc_Crash_System_7036.evtx`,
+EVTX-ATTACK-SAMPLES corpus. Same logic exercised (`param1` not containing
+`Remote Registry`). See `tests/fixtures/evtx/PROVENANCE.md`.
+
 `selection` does not match (`param1` doesn't contain `Remote Registry`)
 → rule does not match.
 

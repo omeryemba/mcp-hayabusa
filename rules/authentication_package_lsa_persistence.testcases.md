@@ -53,6 +53,20 @@ Details:      scecli
 Image:        C:\Windows\System32\lsass.exe
 ```
 
+```yaml
+fixture: authentication_package_lsa_persistence__negative.evtx
+expect: no_fire
+```
+
+Execution-test fixture note: this negative case is backed by a different
+real sample than the prose above (a Sysmon EventID 13 SetValue against
+`...\CurrentVersion\Run\360v`, `DE_timestomp_and_dll_sideloading_and_RunPersist.evtx`,
+EVTX-ATTACK-SAMPLES) rather than a literal `Notification Packages` write —
+no real sample of the latter was found in the corpus either. It still
+exercises the same logic this case documents (`selection_target` correctly
+not matching an unrelated `TargetObject`), so it's used as the real-data
+stand-in. See `tests/fixtures/evtx/PROVENANCE.md`.
+
 `selection_target` does not match (`TargetObject` doesn't end with `\Control\Lsa\
 Authentication Packages`) → rule does not fire.
 

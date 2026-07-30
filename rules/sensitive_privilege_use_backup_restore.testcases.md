@@ -57,6 +57,17 @@ SubjectUserName: edragent
 PrivilegeList:  SeDebugPrivilege
 ```
 
+```yaml
+fixture: sensitive_privilege_use_backup_restore__negative.evtx
+expect: no_fire
+```
+
+Execution-test fixture note: this negative case is backed by a real
+EID 4673 sample carrying `SeTcbPrivilege` (not `SeDebugPrivilege` as in
+the prose above) — `security_4624_4673_token_manip.evtx`,
+EVTX-ATTACK-SAMPLES corpus — the same "unrelated sensitive privilege"
+logic this case documents. See `tests/fixtures/evtx/PROVENANCE.md`.
+
 `selection` does not match (`PrivilegeList` doesn't contain
 `SeBackupPrivilege`/`SeRestorePrivilege`) → rule does not match.
 

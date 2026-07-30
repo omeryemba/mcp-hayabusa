@@ -91,6 +91,21 @@ pytest
 
 All tests run against mocked subprocess calls, so no real `hayabusa` binary or `.evtx` file is required. Coverage is split across `tests/test_hayabusa.py` (the CLI wrapper functions), `tests/test_knowledge.py` (rule catalog/ATT&CK aggregation, against real small YAML fixtures), `tests/test_config.py` (binary resolution via `HAYABUSA_BIN`/`PATH`), and `tests/test_server.py` (the MCP tool and resource registrations themselves).
 
+This does *not* apply to `validate-rule-execution.py` below, which is a separate, real-binary-required check, not part of `pytest`.
+
+## Custom Detection Rule Validation
+
+This project's custom Sigma rules under `rules/` are checked two ways:
+
+- **`validate-rule.py`** (`.claude/skills/detection-engineering/scripts/validate-rule.py`) — metadata-only: ATT&CK tag, `level`, `falsepositives`, and that a sibling `.testcases.md` file exists. Needs only `pyyaml`, no real binary. Runs in CI (`validate-rules` job).
+- **`validate-rule-execution.py`** (`.claude/skills/detection-engineering/scripts/validate-rule-execution.py`) — actually runs each rule against a real `.evtx` fixture via a real `hayabusa` binary and checks it fires/doesn't fire as documented in machine-readable ` ```yaml ` blocks embedded in the rule's `.testcases.md`. Requires the `mcp_hayabusa` package installed (`pip install -e .`) and a real `hayabusa` binary on `PATH`/`HAYABUSA_BIN`. **Not currently wired into CI** — run it manually before treating a rule change as done:
+
+  ```bash
+  python .claude/skills/detection-engineering/scripts/validate-rule-execution.py rules/
+  ```
+
+  Fixtures are resolved from the `HAYABUSA_SAMPLE_EVTX_DIR` environment variable if set (point this at a fuller local corpus, e.g. EVTX-ATTACK-SAMPLES), otherwise from the small real fixtures vendored under `tests/fixtures/evtx/` (see `tests/fixtures/evtx/PROVENANCE.md` for their sourcing). Exit codes: `0` all cases passed, `1` a case contradicted its documented expectation, `2` a usage/parse error, `3` no failures but at least one rule's cases were all skipped (missing binary or fixture) — kept distinct from `0` so a missing prerequisite can never look like a clean pass.
+
 ## Lint / Typecheck
 
 ```bash

@@ -40,6 +40,22 @@ python .claude/skills/detection-engineering/scripts/validate-rule.py path/to/rul
 
 Treat a non-zero exit as the rule not being done yet — fix what `issues` calls out and re-run rather than shipping a rule the script hasn't passed.
 
+`validate-rule.py` only checks that standard 4's `.testcases.md` file *exists* and is non-empty — it never runs the rule against real data, so a rule can pass every check above and still be structurally broken (this project has shipped exactly that kind of bug before: a fake field reference, a missing `Channel` gate, an exact-match false negative — see `investigations/SAMPLE-EVTX-01.md`). Close that gap with the execution-based runner:
+
+```
+python .claude/skills/detection-engineering/scripts/validate-rule-execution.py rules/
+```
+
+This actually runs each rule against a real `.evtx` fixture via a real `hayabusa` binary and checks it fires/doesn't fire as documented in machine-readable ` ```yaml ` blocks embedded in the rule's `.testcases.md`, e.g.:
+
+```yaml
+fixture: my_rule.evtx
+expect: fires        # or: no_fire
+min_hits: 1           # optional, default 1, ignored when expect: no_fire
+```
+
+Add one such block per `## Positive`/`## Negative` case you can back with a real fixture — additive alongside the existing prose, which stays as human-readable documentation. Unlike `validate-rule.py`, this script needs the `mcp_hayabusa` package installed and a real `hayabusa` binary on `PATH`/`HAYABUSA_BIN`, and **it is not currently wired into CI** — nothing blocks a merge on it failing yet, so run it manually and don't treat a rule as done until it passes. Fixtures resolve from `HAYABUSA_SAMPLE_EVTX_DIR` if set, else the small real excerpts vendored under `tests/fixtures/evtx/` (sourced/attributed in `tests/fixtures/evtx/PROVENANCE.md`). If no real sample exists for a scenario, leave it prose-only rather than inventing a fixture or a fake result — an honestly-undocumented case is better than a fabricated pass.
+
 ## References
 
 When writing rules, consult:

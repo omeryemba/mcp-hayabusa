@@ -32,6 +32,12 @@ SubjectUserName:  jdoe
 IpAddress:        10.0.0.5
 ```
 
+```yaml
+fixture: admin_share_write_access_smb.evtx
+expect: fires
+min_hits: 6
+```
+
 `security`/`selection` match (`EventID: 5145`, `AccessMask` ends in `6`,
 which is in `[2367abABEF]`); `selection_admin_share` matches (`\ADMIN$`);
 neither filter applies → rule fires.
@@ -64,6 +70,11 @@ EventID:          5145
 ShareName:        \\*\ADMIN$
 AccessMask:       0x1
 SubjectUserName:  jdoe
+```
+
+```yaml
+fixture: admin_share_write_access_smb__negative.evtx
+expect: no_fire
 ```
 
 `AccessMask` ends in `1`, not in `[2367abABEF]` → `selection` does not
