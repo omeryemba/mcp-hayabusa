@@ -5,13 +5,19 @@ caused hayabusa's channel filter to exclude every input file and disable
 the rule entirely (confirmed via `-v` output: `Evtx files loaded after
 channel filter: 0`, `Detection rules enabled after channel filter: 0`) —
 a guaranteed zero-detection rule regardless of real activity. Fixed by
-adding a `registry_event: {Channel: Microsoft-Windows-Sysmon/Operational}`
+adding a `registry_set: {Channel: Microsoft-Windows-Sysmon/Operational}`
 selection block. Re-verified 2026-07-29 with a rule clone matching a real
 Sysmon EventID 13 SetValue sample (`\CurrentVersion\Run\360v` from
 `DE_timestomp_and_dll_sideloading_and_RunPersist.evtx`, EVTX-ATTACK-SAMPLES
 corpus): without the `Channel` block, 0/1; with it, 1/1. `TargetObject`
 and `EventType` were confirmed as correct, real field names for this
 event once the channel gate was in place — they were never the problem.
+`logsource.category` was also corrected from `registry_event` to
+`registry_set` on 2026-07-30 to match this project's own installed
+builtin convention for this exact detection shape (Sysmon EventID 13
+SetValue) — cosmetic only, doesn't change matching behavior. Status
+promoted to `test` the same day given the confirmed real-sample firing
+above.
 
 ## Positive (must match)
 
@@ -28,7 +34,7 @@ Details:      msv1_0 C:\Windows\System32\evilauthpkg.dll
 Image:        C:\Windows\System32\reg.exe
 ```
 
-`registry_event` matches (`Channel: Microsoft-Windows-Sysmon/Operational`),
+`registry_set` matches (`Channel: Microsoft-Windows-Sysmon/Operational`),
 `selection_target` matches `TargetObject` (ends with `\Control\Lsa\Authentication
 Packages`), `selection_type` matches `EventType: SetValue` → all three true
 → rule fires.
@@ -69,7 +75,7 @@ Image:        C:\Windows\System32\services.exe
 ## Negative (must not match)
 
 Otherwise-matching event content, but from a channel other than the one this
-rule is scoped to — confirms the `registry_event` channel gate actually
+rule is scoped to — confirms the `registry_set` channel gate actually
 constrains matching rather than being decorative:
 
 ```
@@ -79,13 +85,13 @@ EventType:    SetValue
 TargetObject: HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Authentication Packages
 ```
 
-`registry_event` does not match (`Channel` isn't
+`registry_set` does not match (`Channel` isn't
 `Microsoft-Windows-Sysmon/Operational`) → rule does not fire.
 
 ## Known limitation (documented in `falsepositives`)
 
 The rule fires on any `SetValue` event against this registry value regardless of
-which DLL is actually named in the new value, since Sysmon's `registry_event`
+which DLL is actually named in the new value, since Sysmon's `registry_set`
 category does not reliably expose full value contents (`Details`) for every
 provider/event combination. A true positive (attacker-added DLL) and a benign
 one (legitimate SSO/smart-card software reconfiguring LSA, or an OS update

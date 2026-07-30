@@ -1,6 +1,6 @@
 title: Remote Registry Service Started
 id: 1b82a11d-f4c2-4ba2-a901-245b84799e96
-status: experimental
+status: test
 description: |
   Detects the built-in "Remote Registry" service transitioning to a
   running state (EventID 7036, Service Control Manager, System channel).
@@ -23,11 +23,19 @@ description: |
   This rule is a pivot/context signal meant to be correlated against
   subsequent registry access or privilege-use events, not a standalone
   confirmed-compromise indicator.
+
+  Status promoted to `test` (2026-07-30): no real "Remote Registry"
+  EID 7036 sample exists in the EVTX-ATTACK-SAMPLES corpus, but the
+  detection mechanism was confirmed end-to-end against a real EID 7036
+  sample of a different service (`Windows Error Reporting Service`,
+  `param2: running`), proving `param1`/`param2`/`Provider_Name` are the
+  correct field names and values for this event family.
 references:
   - https://attack.mitre.org/techniques/T1003/002/
   - https://learn.microsoft.com/en-us/troubleshoot/windows-server/system-management-components/configure-remote-access-registry-editing
 author: mcp-hayabusa
 date: 2026-07-28
+modified: 2026-07-30
 tags:
   - attack.credential-access
   - attack.t1003.002
@@ -51,3 +59,4 @@ falsepositives:
   - Help desk or IT staff manually enabling Remote Registry for
     authorized troubleshooting.
 level: medium
+ruletype: Sigma

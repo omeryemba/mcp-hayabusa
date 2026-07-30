@@ -14,7 +14,8 @@ PowerShell opening lsass.exe with `GrantedAccess: 0x1010`): without the
 falsepositives/description otherwise correctly document — a reminder that
 `logsource.category` alone (`process_access` here) does not make hayabusa
 infer a channel; every rule needs its own explicit `Channel`/`EventID` gate
-ANDed into `condition:`.
+ANDed into `condition:`. Status promoted to `test` given the confirmed
+real-sample firing above.
 
 ## Positive (must match) — confirmed firing
 

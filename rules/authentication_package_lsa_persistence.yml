@@ -1,6 +1,6 @@
 title: LSA Authentication Package Persistence
 id: 9ad44d33-4f99-4c45-be87-cbaa02324243
-status: experimental
+status: test
 description: |
   Detects a new value being set on the LSA 'Authentication Packages' registry
   value (HKLM\SYSTEM\CurrentControlSet\Control\Lsa\Authentication Packages).
@@ -34,31 +34,51 @@ description: |
   input file and disable the rule entirely — a guaranteed zero-detection
   rule regardless of real activity. Every other working rule in this
   project's set explicitly declares a `Channel` gate; this one didn't.
-  Added the `registry_event` selection block below (Sysmon's
+  Added the `registry_set` selection block below (Sysmon's
   `TargetObject`/`EventType` fields, confirmed as the correct field names
   via a real sample, are only reachable once the channel is declared) and
   re-verified firing 1/1 against a real Sysmon EventID 13 SetValue sample.
+
+  Category corrected to `registry_set` (2026-07-30): this rule originally
+  used `logsource.category: registry_event`, but its actual detection
+  logic (Sysmon EventID 13, a value being set) matches the pattern this
+  project's own installed builtin ruleset consistently categorizes as
+  `registry_set` instead (confirmed against
+  `sigma\sysmon\emerging-threats\2020\Malware\Blue-Mockingbird\registry_set_mal_blue_mockingbird.yml`,
+  `status: test`, an identical `registry_set`/EventID 13/`Channel:
+  Microsoft-Windows-Sysmon/Operational`/`TargetObject|endswith` structure).
+  Doesn't change hayabusa's matching — already established that
+  hayabusa's channel filter reads the literal `Channel`/`EventID` fields
+  in the detection body, not `logsource.category` — but it corrects a
+  real taxonomy mismatch against both the Sigma spec and this project's
+  own conventions.
+
+  Status promoted to `test` (2026-07-30): confirmed firing 1/1 against a
+  real Sysmon EventID 13 SetValue sample in the EVTX-ATTACK-SAMPLES
+  corpus (retargeted to `\CurrentVersion\Run\360v`, since no real
+  Authentication Packages sample exists in this corpus).
 references:
   - https://attack.mitre.org/techniques/T1547/002/
   - https://learn.microsoft.com/en-us/windows/win32/secauthn/authentication-packages
   - https://learn.microsoft.com/en-us/windows/win32/secauthn/writing-an-authentication-package
 author: mcp-hayabusa
 date: 2026-07-25
+modified: 2026-07-30
 tags:
   - attack.persistence
   - attack.credential-access
   - attack.t1547.002
 logsource:
-  category: registry_event
+  category: registry_set
   product: windows
 detection:
-  registry_event:
+  registry_set:
     Channel: Microsoft-Windows-Sysmon/Operational
   selection_target:
     TargetObject|endswith: '\Control\Lsa\Authentication Packages'
   selection_type:
     EventType: SetValue
-  condition: registry_event and selection_target and selection_type
+  condition: registry_set and selection_target and selection_type
 falsepositives:
   - Installation or reconfiguration of legitimate third-party authentication
     software that registers its own authentication package (e.g. smart-card
@@ -71,8 +91,9 @@ falsepositives:
     LSA-hardening scripts) that intentionally manages this value as part of
     an approved security baseline.
   - This rule fires on any SetValue event against this registry value
-    regardless of which DLL is named, since Sysmon's registry_event category
+    regardless of which DLL is named, since Sysmon's registry_set category
     does not reliably expose the new value's contents for every provider/
     event combination — triage should confirm the actual DLL added, not
     just that the value changed.
 level: high
+ruletype: Sigma

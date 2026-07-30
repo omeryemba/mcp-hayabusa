@@ -3,7 +3,7 @@ id: 6e9cb56f-badf-4f06-a406-ae744c290dd2
 related:
   - id: 37b219bc-37bb-1261-f179-64307c1a1829
     type: derived
-status: experimental
+status: test
 description: |
   Detects access to a Windows administrative share (`ADMIN$`, or a
   drive-letter share like `C$`/`D$`) via Event ID 5140 ("A network share
@@ -33,11 +33,15 @@ description: |
   management, EDR/backup agents, remote helpdesk tooling) — this rule is
   a pivot/context signal, not a standalone confirmed-compromise
   indicator, matching the same severity as the builtin rule it replaces.
+
+  Status promoted to `test` (2026-07-30): confirmed firing 3/3 against
+  real EID 5140 `ADMIN$` access events in the EVTX-ATTACK-SAMPLES corpus.
 references:
   - https://attack.mitre.org/techniques/T1021/002/
   - https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-5140
 author: mcp-hayabusa
 date: 2026-07-29
+modified: 2026-07-30
 tags:
   - attack.lateral-movement
   - attack.t1021.002
@@ -63,3 +67,4 @@ falsepositives:
     Share" to be configured for Success/Failure — not enabled by
     default.
 level: medium
+ruletype: Sigma

@@ -37,12 +37,20 @@ description: |
   guaranteed zero-detection rule regardless of real activity. Added the
   `security` selection block below (`Channel: Security`, matching every
   other Security-log rule in this project's set) to fix it.
+
+  Still `experimental`, not promoted to `test` (as of 2026-07-30): no
+  real EventID 4673 sample with `SeBackupPrivilege`/`SeRestorePrivilege`
+  exists in the EVTX-ATTACK-SAMPLES corpus to confirm an actual positive
+  match — only the field-name/channel-gate mechanism was verified (the
+  fix above restores the rule's ability to fire at all; it does not
+  confirm it fires correctly on the intended scenario).
 references:
   - https://attack.mitre.org/techniques/T1003/002/
   - https://learn.microsoft.com/en-us/windows/security/threat-protection/auditing/event-4673
   - https://learn.microsoft.com/en-us/windows/security/threat-protection/security-policy-settings/audit-the-use-of-backup-and-restore-privilege
 author: mcp-hayabusa
 date: 2026-07-28
+modified: 2026-07-30
 tags:
   - attack.credential-access
   - attack.t1003.002
@@ -73,3 +81,4 @@ falsepositives:
     subcategory is otherwise turned on. Verify this policy is configured
     before relying on this rule for coverage.
 level: high
+ruletype: Sigma

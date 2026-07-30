@@ -1,6 +1,6 @@
 title: Suspicious Access to LSASS Process Memory
 id: 0b7ec4fe-f185-4039-82ef-12ab1669ebc6
-status: experimental
+status: test
 description: |
   Detects processes requesting a high-privilege access right (read memory / all access)
   against lsass.exe, the classic prerequisite for dumping LSASS memory to harvest
@@ -31,7 +31,7 @@ description: |
   not make hayabusa infer one. Added the block below and re-verified firing 1/1
   against a real Sysmon EventID 10 sample (`PowerShell → lsass.exe`,
   `GrantedAccess: 0x1010`, from `PanacheSysmon_vs_AtomicRedTeam01.evtx`,
-  EVTX-ATTACK-SAMPLES corpus).
+  EVTX-ATTACK-SAMPLES corpus). Status promoted to `test` accordingly.
 references:
   - https://attack.mitre.org/techniques/T1003/001/
   - https://learn.microsoft.com/en-us/sysinternals/downloads/procdump
@@ -82,3 +82,4 @@ falsepositives:
   - Authorized incident-response or forensic tooling intentionally capturing LSASS
     memory during an approved investigation.
 level: high
+ruletype: Sigma

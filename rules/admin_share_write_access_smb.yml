@@ -3,7 +3,7 @@ id: 11b64ebf-0968-456b-be90-cf89931311ad
 related:
   - id: 37f5d188-182d-7a53-dca7-4bebbb6ce43e
     type: derived
-status: experimental
+status: test
 description: |
   Detects a non-system account writing a file (an `AccessMask` with the
   `FILE_WRITE_DATA` bit set) to a Windows administrative share —
@@ -53,6 +53,11 @@ description: |
   group. Verified upstream (`Yamato-Security/hayabusa-rules` `main`, as
   of this fix) has not addressed this in the builtin rule.
 
+  Status promoted to `test` (2026-07-30): confirmed firing 14/14 against
+  real EID 5145 write-access events in the EVTX-ATTACK-SAMPLES corpus
+  (10 combined-mask writes, 4 bare-`0x2` writes), with read-only and
+  non-write combined masks correctly excluded.
+
   Severity: high, because a write to an administrative share by a
   non-system account is a strong, fairly specific lateral-movement
   staging signal — legitimate uses exist (see false positives) but this
@@ -64,6 +69,7 @@ references:
   - https://github.com/OTRF/ThreatHunter-Playbook/blob/f7a58156dbfc9b019f17f638b8c62d22e557d350/playbooks/WIN-201012004336.yaml
 author: mcp-hayabusa
 date: 2026-07-29
+modified: 2026-07-30
 tags:
   - attack.lateral-movement
   - attack.collection
@@ -95,3 +101,4 @@ falsepositives:
     File Share" to be configured for Success/Failure — not enabled by
     default.
 level: high
+ruletype: Sigma
