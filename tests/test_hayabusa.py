@@ -120,6 +120,47 @@ def test_csv_timeline_missing_output_raises(tmp_path, monkeypatch):
         hayabusa.csv_timeline(str(tmp_path))
 
 
+def test_csv_timeline_surfaces_hayabusa_errors_alongside_real_rows(tmp_path, monkeypatch):
+    # A directory scan where one file is corrupted and one is fine: hayabusa
+    # exits 0, writes real rows for the file it could read, and prints the
+    # "Errors were generated" hint on stdout for the one it couldn't -- both
+    # must come through, not just one or the other.
+    def fake_run(args, timeout_sec=600):
+        output_path = Path(args[args.index("-o") + 1])
+        with output_path.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["Timestamp", "RuleTitle", "Level"])
+            writer.writerow(["2024-01-01T00:00:00Z", "Rule 0", "high"])
+        return FakeResult(
+            returncode=0,
+            stdout="Errors were generated. Please check ./logs/errorlog-x.log for details.",
+            command=["hayabusa", *args],
+        )
+
+    monkeypatch.setattr(hayabusa, "_run", fake_run)
+    monkeypatch.setattr(hayabusa, "_require_existing_path", lambda p, label="target": tmp_path)
+
+    result = hayabusa.csv_timeline(str(tmp_path))
+
+    assert result["total_rows"] == 1
+    assert result["rows"][0]["RuleTitle"] == "Rule 0"
+    assert "Errors were generated" in result["hayabusa_errors"]
+
+
+def test_csv_timeline_hayabusa_errors_empty_on_clean_run(tmp_path, monkeypatch):
+    def fake_run(args, timeout_sec=600):
+        output_path = Path(args[args.index("-o") + 1])
+        output_path.write_text("Timestamp,RuleTitle,Level\n", encoding="utf-8")
+        return FakeResult(returncode=0, stdout="Results Summary: ...", command=["hayabusa", *args])
+
+    monkeypatch.setattr(hayabusa, "_run", fake_run)
+    monkeypatch.setattr(hayabusa, "_require_existing_path", lambda p, label="target": tmp_path)
+
+    result = hayabusa.csv_timeline(str(tmp_path))
+
+    assert result["hayabusa_errors"] == ""
+
+
 def test_eid_metrics_parses_and_truncates(tmp_path, monkeypatch):
     def fake_run(args, timeout_sec=600):
         output_path = Path(args[args.index("-o") + 1])
@@ -514,6 +555,23 @@ def test_target_must_exist(tmp_path):
         hayabusa._require_existing_path(str(missing))
 
 
+def test_hayabusa_error_hint_detects_and_strips_ansi():
+    stdout = (
+        "\x1b[0m\x1b[38;2;0;255;0mSaved file: out.csv (0 B)\n\n"
+        "\x1b[38;2;255;0;0mErrors were generated. Please check "
+        "./logs/errorlog-20260730_050320.log for details.\n\x1b[0m"
+    )
+    hint = hayabusa._hayabusa_error_hint(stdout)
+    assert hint == (
+        "Errors were generated. Please check ./logs/errorlog-20260730_050320.log for details."
+    )
+
+
+def test_hayabusa_error_hint_returns_empty_when_absent():
+    stdout = "Results Summary:\nEvents with hits / Total events: 3 / 100\n"
+    assert hayabusa._hayabusa_error_hint(stdout) == ""
+
+
 def test_require_existing_path_accepts_real_existing_path(tmp_path):
     real_file = tmp_path / "Security.evtx"
     real_file.write_text("", encoding="utf-8")
@@ -824,6 +882,29 @@ def test_search_failure_raises(tmp_path, monkeypatch):
         hayabusa.search(str(tmp_path), ["needle"])
 
 
+def test_search_surfaces_hayabusa_errors_on_zero_hits(tmp_path, monkeypatch):
+    # hayabusa can exit 0 with an empty (but existing) output file while
+    # still having failed to read the target at all -- e.g. a corrupted
+    # file. total_rows: 0 alone can't distinguish that from a genuine
+    # zero-match search; hayabusa_errors must carry the difference.
+    def fake_run(args, timeout_sec=600):
+        output_path = Path(args[args.index("-o") + 1])
+        output_path.write_text("", encoding="utf-8")
+        return FakeResult(
+            returncode=0,
+            stdout="Errors were generated. Please check ./logs/errorlog-x.log for details.",
+            command=["hayabusa", *args],
+        )
+
+    monkeypatch.setattr(hayabusa, "_run", fake_run)
+    monkeypatch.setattr(hayabusa, "_require_existing_path", lambda p, label="target": tmp_path)
+
+    result = hayabusa.search(str(tmp_path), ["needle"])
+
+    assert result["total_rows"] == 0
+    assert "Errors were generated" in result["hayabusa_errors"]
+
+
 def _patch_scan_evtx_wrappers(monkeypatch, tmp_path, detection_rows=None):
     # scan_evtx must not shell out itself -- it should only call the
     # existing hayabusa.py wrapper functions. Monkeypatch those directly
@@ -841,6 +922,7 @@ def _patch_scan_evtx_wrappers(monkeypatch, tmp_path, detection_rows=None):
             "truncated": False,
             "rows": [{"Filename": "a.evtx"}],
             "stderr_summary": "",
+            "hayabusa_errors": "",
         }
 
     def fake_csv_timeline(target, **kwargs):
@@ -852,6 +934,7 @@ def _patch_scan_evtx_wrappers(monkeypatch, tmp_path, detection_rows=None):
             "truncated": True,
             "rows": list(detection_rows),
             "stderr_summary": "",
+            "hayabusa_errors": "",
         }
 
     def fake_eid_metrics(target, **kwargs):
@@ -863,6 +946,7 @@ def _patch_scan_evtx_wrappers(monkeypatch, tmp_path, detection_rows=None):
             "truncated": False,
             "rows": [{"EventID": "4624"}],
             "stderr_summary": "",
+            "hayabusa_errors": "",
         }
 
     def fail_if_called(*args, **kwargs):
@@ -894,6 +978,7 @@ def test_scan_evtx_full_composes_existing_wrappers(tmp_path, monkeypatch):
         "matched_detections": 10,
         "detections_truncated": True,
         "distinct_event_ids": 7,
+        "hayabusa_errors": "",
     }
 
     # min_level and max_rows must reach csv_timeline; the other two calls
@@ -984,6 +1069,25 @@ def test_scan_evtx_target_must_exist(tmp_path):
     missing = tmp_path / "does-not-exist.evtx"
     with pytest.raises(FileNotFoundError):
         hayabusa.scan_evtx(str(missing))
+
+
+def test_scan_evtx_rolls_up_hayabusa_errors_from_any_sub_call(tmp_path, monkeypatch):
+    # Only eid_metrics saw hayabusa's error hint here -- the composite's own
+    # summary must still surface it, not just the eid_metrics sub-result.
+    captured = _patch_scan_evtx_wrappers(monkeypatch, tmp_path)
+    original_eid_metrics = hayabusa.eid_metrics
+
+    def fake_eid_metrics(target, **kwargs):
+        result = original_eid_metrics(target, **kwargs)
+        result["hayabusa_errors"] = "Errors were generated. Please check ./logs/x.log."
+        return result
+
+    monkeypatch.setattr(hayabusa, "eid_metrics", fake_eid_metrics)
+
+    result = hayabusa.scan_evtx(str(tmp_path))
+
+    assert captured  # sanity: the patched wrappers actually ran
+    assert "Errors were generated" in result["summary"]["hayabusa_errors"]
 
 
 def _write_rule(path, *, title, level="informational", status="stable", tags=None, description=""):

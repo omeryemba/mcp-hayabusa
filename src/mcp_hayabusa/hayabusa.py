@@ -96,6 +96,33 @@ def _command_str(result: CommandResult) -> str:
     return " ".join(shlex.quote(part) for part in result.command)
 
 
+_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+_ERRORS_GENERATED_RE = re.compile(r"Errors were generated\.[^\r\n]*", re.IGNORECASE)
+
+
+def _hayabusa_error_hint(stdout: str) -> str:
+    """Detect hayabusa's own "Errors were generated" hint in stdout.
+
+    hayabusa can fail to process a specific input file (e.g. a corrupted or
+    non-evtx file) while still exiting 0 and producing an otherwise normal
+    looking result -- confirmed directly: a garbage "target.evtx" causes
+    "Failed to open evtx file: ..." to be written only to a separate
+    ./logs/errorlog-<timestamp>.log file (relative to whatever directory the
+    hayabusa process happens to run from, so not reliably locatable or
+    readable here), with result.stderr staying completely empty. The only
+    remaining trace is this one-line hint on stdout. On a directory scan
+    where only some input files are bad, hayabusa still emits real results
+    for the files it could read alongside this hint, so this only surfaces
+    it (for the caller to weigh against however many/few results came back)
+    rather than treating its presence as fatal on its own.
+
+    Returns the matched hint line (ANSI escape codes stripped), or "" if
+    hayabusa printed no such hint.
+    """
+    match = _ERRORS_GENERATED_RE.search(_ANSI_ESCAPE_RE.sub("", stdout))
+    return match.group(0).strip() if match else ""
+
+
 _VERSION_RE = re.compile(r"Hayabusa\s+(v[\d][^\r\n]*)", re.IGNORECASE)
 
 
@@ -259,6 +286,7 @@ def csv_timeline(
         "truncated": total > len(rows),
         "rows": rows,
         "stderr_summary": result.stderr.strip()[-2000:] if result.stderr else "",
+        "hayabusa_errors": _hayabusa_error_hint(result.stdout),
     }
 
 
@@ -321,6 +349,7 @@ def json_timeline(
         "truncated": total > len(records),
         "records": records,
         "stderr_summary": result.stderr.strip()[-2000:] if result.stderr else "",
+        "hayabusa_errors": _hayabusa_error_hint(result.stdout),
     }
 
 
@@ -362,6 +391,7 @@ def eid_metrics(
         "truncated": total > len(rows),
         "rows": rows,
         "stderr_summary": result.stderr.strip()[-2000:] if result.stderr else "",
+        "hayabusa_errors": _hayabusa_error_hint(result.stdout),
     }
 
 
@@ -403,6 +433,7 @@ def extract_base64(
         "truncated": total > len(rows),
         "rows": rows,
         "stderr_summary": result.stderr.strip()[-2000:] if result.stderr else "",
+        "hayabusa_errors": _hayabusa_error_hint(result.stdout),
     }
 
 
@@ -444,6 +475,7 @@ def log_metrics(
         "truncated": total > len(rows),
         "rows": rows,
         "stderr_summary": result.stderr.strip()[-2000:] if result.stderr else "",
+        "hayabusa_errors": _hayabusa_error_hint(result.stdout),
     }
 
 
@@ -485,6 +517,7 @@ def computer_metrics(
         "truncated": total > len(rows),
         "rows": rows,
         "stderr_summary": result.stderr.strip()[-2000:] if result.stderr else "",
+        "hayabusa_errors": _hayabusa_error_hint(result.stdout),
     }
 
 
@@ -543,6 +576,7 @@ def logon_summary(
             "rows": failed_rows,
         },
         "stderr_summary": result.stderr.strip()[-2000:] if result.stderr else "",
+        "hayabusa_errors": _hayabusa_error_hint(result.stdout),
     }
 
 
@@ -591,10 +625,10 @@ def pivot_keywords_list(
         "command": _command_str(result),
         "categories": categories,
         "stderr_summary": result.stderr.strip()[-2000:] if result.stderr else "",
+        "hayabusa_errors": _hayabusa_error_hint(result.stdout),
     }
 
 
-_ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 _CATEGORY_FOUND_RE = re.compile(r"^(.+) found \(\d+\):$")
 _CATEGORY_NONE_RE = re.compile(r"^No (.+) found\.$")
 
@@ -722,6 +756,7 @@ def search(
         "truncated": total > len(rows),
         "rows": rows,
         "stderr_summary": result.stderr.strip()[-2000:] if result.stderr else "",
+        "hayabusa_errors": _hayabusa_error_hint(result.stdout),
     }
 
 
@@ -779,12 +814,21 @@ def scan_evtx(
     # is applied; with one, "matched" can only reflect the fetched pool.
     matched_detections = detections["total_rows"] if rule_filter is None else len(filtered_rows)
 
+    # Roll up whichever sub-call (if any) saw hayabusa's own "Errors were
+    # generated" hint, since all three scan the same target and a failure
+    # to read part of it would otherwise be invisible in this composite's
+    # own summary even though each sub-result already carries it individually.
+    hayabusa_errors = (
+        log_info["hayabusa_errors"] or detections["hayabusa_errors"] or eid_info["hayabusa_errors"]
+    )
+
     summary_stats = {
         "log_files_scanned": log_info["total_rows"],
         "total_detections": detections["total_rows"],
         "matched_detections": matched_detections,
         "detections_truncated": detections["truncated"],
         "distinct_event_ids": eid_info["total_rows"],
+        "hayabusa_errors": hayabusa_errors,
     }
 
     if output_format == "full":
