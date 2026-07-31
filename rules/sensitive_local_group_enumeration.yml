@@ -1,6 +1,6 @@
 title: Sensitive Local Group Membership Enumerated
 id: b44e4c53-0961-4843-94cd-72a57dd6858f
-status: experimental
+status: test
 description: |
   Detects a process enumerating the membership of a sensitive, privileged
   built-in local group (Administrators, Remote Desktop Users, Backup
@@ -43,10 +43,13 @@ description: |
   cases are backed by real EventID 4799 records located in the
   EVTX-ATTACK-SAMPLES corpus, from the same source file/session
   (`Discovery/4799_remote_local_groups_enumeration.evtx`) — see this
-  rule's `.testcases.md` for record details. Fixture files have not yet
-  been vendored under `tests/fixtures/evtx/`; `status` will be promoted
-  to `test` once the execution-based runner confirms both cases against
-  the real vendored fixtures.
+  rule's `.testcases.md` for record details.
+
+  Status promoted to `test` (2026-07-31): confirmed firing 1/1 against
+  the real Administrators-enumeration EventID 4799 record, and 0 hits
+  against the real Users-enumeration negative record, both vendored
+  under `tests/fixtures/evtx/` and verified end-to-end via
+  `validate-rule-execution.py` with a real `hayabusa` binary.
 references:
   - https://attack.mitre.org/techniques/T1069/001/
   - https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4799
