@@ -7,9 +7,24 @@ description: Query SIEM and check detection coverage
 
 You are performing a defensive security investigation.
 
+## Input
+
+Arguments: $ARGUMENTS
+
+Parse as:
+
+1. **query_file** (required) — path to a file containing the SIEM query to run. If missing, stop and ask the user for a query file.
+2. **timerange** (optional) — defaults to `-24h` if not given.
+
+Example:
+
+```
+/query queries/suspicious_logons.txt -24h
+```
+
 ## Steps
 
-1. Execute the SIEM query for the investigation target.
+1. Confirm `query_file` was supplied and exists; stop and ask if not. Read the query from it, then execute that query for the given `timerange` (default `-24h`) against SIEM data, if a SIEM MCP tool or resource is configured in this environment. If no SIEM integration is available, say so explicitly rather than silently skipping this step.
 
 2. Analyse the results and extract:
    - suspicious processes
