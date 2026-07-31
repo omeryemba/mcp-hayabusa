@@ -9,6 +9,15 @@
             "command": "python ${CLAUDE_PROJECT_DIR}/.claude/hooks/log_modified_file.py"
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./scripts/validate-rule.sh"
+          }
+        ]
       }
     ]
   }
