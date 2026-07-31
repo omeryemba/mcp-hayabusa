@@ -58,6 +58,16 @@ format allows), even where it contains a single record.
 - Rule: `remote_registry_service_started.yml` — expect: no_fire, confirmed 0/1.
 - Note: no real "Remote Registry" EID 7036 sample exists in this corpus — this rule's **positive** case remains prose-only/unconfirmed. This negative excerpt confirms real field names (`param1`/`param2`/`Provider_Name`) for this event family and that an unrelated service's `running` transition correctly does not fire.
 
+## sensitive_local_group_enumeration.evtx
+
+- Source: `Discovery/4799_remote_local_groups_enumeration.evtx`, EventRecordID 3819707 (Security/4799, `CallerProcessName: net1.exe`, `TargetUserName: Administrators`).
+- Rule: `sensitive_local_group_enumeration.yml` — expect: fires, confirmed 1/1.
+
+## sensitive_local_group_enumeration__negative.evtx
+
+- Source: same file as above, EventRecordID 3819788 (Security/4799, `TargetUserName: Users` — a non-privileged default group, same host/actor/session as the positive fixture, isolating the `TargetUserName` field).
+- Rule: `sensitive_local_group_enumeration.yml` — expect: no_fire, confirmed 0/1.
+
 ## sensitive_privilege_use_backup_restore__negative.evtx
 
 - Source: `Privilege Escalation/security_4624_4673_token_manip.evtx`, EventRecordID 18200 (Security/4673, `PrivilegeList: SeTcbPrivilege`).

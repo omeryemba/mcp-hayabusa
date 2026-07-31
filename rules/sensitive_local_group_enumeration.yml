@@ -1,0 +1,88 @@
+title: Sensitive Local Group Membership Enumerated
+id: b44e4c53-0961-4843-94cd-72a57dd6858f
+status: experimental
+description: |
+  Detects a process enumerating the membership of a sensitive, privileged
+  built-in local group (Administrators, Remote Desktop Users, Backup
+  Operators, Account Operators) via Event ID 4799 ("A security-enabled
+  local group membership was enumerated"). This is a classic early
+  reconnaissance step — via `net localgroup <group>`, PowerShell
+  `Get-LocalGroupMember`, or direct SAMR/LSA RPC calls that never spawn a
+  local process at all — used to identify which accounts hold elevated
+  local privileges before targeting them for credential theft, lateral
+  movement, or privilege escalation (T1069.001).
+
+  This event fires from the SAM/LSA subsystem itself regardless of which
+  tool performed the enumeration, so it complements (not duplicates)
+  hayabusa's builtin process-creation-based recon rules (e.g.
+  sigma\builtin\process_creation\proc_creation_win_net_groups_and_accounts_recon.yml,
+  keyed on EventID 4688/`net.exe` command-line content): those need
+  command-line auditing enabled and only show that a recon-flavored
+  command was *launched*, not which group was actually *returned*, and
+  they can't see enumeration performed without spawning a matching local
+  process (e.g. via SAMR RPC from a remote host). hayabusa's builtin set
+  has only one rule referencing EventID 4799 at all
+  (sigma\builtin\emerging-threats\2019\TA\Operation-Wocao\win_security_apt_wocao.yml),
+  and it's hardcoded to a single attacker tool's process name
+  (`checkadmin.exe`) — it does not fire on the ordinary `net.exe`-based
+  enumeration this rule targets.
+
+  Severity: low, because querying membership of a privileged local group
+  is routine in legitimate admin/audit workflows — help desk staff and
+  the Local Users and Groups MMC snap-in (`lusrmgr.msc`, itself hosted in
+  `mmc.exe`), SCCM/Group Policy inventory scripts, and vulnerability or
+  compliance scanners all do this constantly — so this is a pivot/context
+  signal for correlation with other activity, not a standalone alert.
+  Microsoft's own monitoring guidance for this event explicitly frames it
+  as "typically ... an informational event, to be reviewed if needed"
+  and recommends watching it only for a defined list of critical groups
+  (built-in Administrators, Backup Operators, and similar) — exactly the
+  scope this rule's `TargetUserName` selection applies.
+
+  Fixture note: both the positive (Administrators) and negative (Users)
+  cases are backed by real EventID 4799 records located in the
+  EVTX-ATTACK-SAMPLES corpus, from the same source file/session
+  (`Discovery/4799_remote_local_groups_enumeration.evtx`) — see this
+  rule's `.testcases.md` for record details. Fixture files have not yet
+  been vendored under `tests/fixtures/evtx/`; `status` will be promoted
+  to `test` once the execution-based runner confirms both cases against
+  the real vendored fixtures.
+references:
+  - https://attack.mitre.org/techniques/T1069/001/
+  - https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4799
+author: mcp-hayabusa
+date: 2026-07-31
+modified: 2026-07-31
+tags:
+  - attack.discovery
+  - attack.t1069.001
+logsource:
+  product: windows
+  service: security
+detection:
+  security:
+    Channel: Security
+  selection:
+    EventID: 4799
+    TargetUserName:
+      - Administrators
+      - Remote Desktop Users
+      - Backup Operators
+      - Account Operators
+  condition: security and selection
+falsepositives:
+  - Help desk or IT staff using the Local Users and Groups MMC snap-in
+    (`lusrmgr.msc`, hosted in `mmc.exe`) to review group membership as
+    part of routine account administration or onboarding/offboarding.
+  - SCCM/ConfigMgr, Group Policy, or similar inventory/compliance
+    scripts that periodically enumerate privileged local group
+    membership as part of a scheduled audit.
+  - Vulnerability or compliance scanners (e.g. Tenable Nessus, Qualys,
+    CIS-CAT) that enumerate local group membership as part of a
+    benchmark scan.
+  - This event only shows that a group's membership was queried and by
+    which account/process — it does not indicate the query itself was
+    unauthorized, so correlate `SubjectUserName`/`CallerProcessName`
+    against expected admin accounts and tooling before escalating.
+level: low
+ruletype: Sigma
