@@ -17,10 +17,17 @@
 
 set -euo pipefail
 
-if command -v python3 >/dev/null 2>&1; then
-    PYTHON=python3
-else
-    PYTHON=python
+PYTHON=""
+for candidate in python3 python; do
+    if command -v "$candidate" >/dev/null 2>&1 && "$candidate" --version >/dev/null 2>&1; then
+        PYTHON="$candidate"
+        break
+    fi
+done
+
+if [[ -z "$PYTHON" ]]; then
+    echo "No working Python interpreter found (tried python3, python); skipping Sigma rule validation." >&2
+    exit 0
 fi
 
 payload="$(cat)"
