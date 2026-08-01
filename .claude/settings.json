@@ -58,7 +58,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -Command \"Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.MessageBox]::Show('Claude Code session finished','Claude Code')\""
+            "command": "./scripts/notify-complete.sh"
           }
         ]
       }
