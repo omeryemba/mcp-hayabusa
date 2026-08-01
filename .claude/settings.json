@@ -1,5 +1,15 @@
 {
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "./scripts/check-prereqs.sh"
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": ".*",
