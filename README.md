@@ -106,6 +106,20 @@ This project's custom Sigma rules under `rules/` are checked two ways:
 
   Fixtures are resolved from the `HAYABUSA_SAMPLE_EVTX_DIR` environment variable if set (point this at a fuller local corpus, e.g. EVTX-ATTACK-SAMPLES), otherwise from the small real fixtures vendored under `tests/fixtures/evtx/` (see `tests/fixtures/evtx/PROVENANCE.md` for their sourcing). Exit codes: `0` all cases passed, `1` a case contradicted its documented expectation, `2` a usage/parse error, `3` no failures but at least one rule's cases were all skipped (missing binary or fixture) — kept distinct from `0` so a missing prerequisite can never look like a clean pass.
 
+## Threat Intelligence Ingestion
+
+The `/ingest-ti` command (`.claude/commands/ingest-ti.md`) ingests IOC data from local files, normalizes it, and correlates it against this project's Sigma rule coverage. Two scripts back it, under `.claude/skills/ingest-ti/scripts/`:
+
+- **`ingest_ti.py`** — normalizes one input file (a native `{type, value, confidence, source, first_seen, attack_technique, notes}` JSON list, or a MISP `Event.Attribute[]` JSON export) into that fixed schema. Needs only the Python standard library. Exit codes: `0` clean, `1` some indicators skipped/coerced, `2` usage/parse error.
+- **`correlate_ti.py`** — takes 1+ normalized files, dedups/merges IOCs sharing a `(type, value)` key, and checks every ATT&CK technique they reference against this repo's installed Sigma rules via `analyze_coverage`/`suggest_rule` (`mcp_hayabusa.knowledge`). Optionally correlates against a saved Hayabusa scan result (`--hayabusa-result`) via a textual substring match. Exit codes: `0` clean, `1` issues found and/or an uncovered technique, `2` usage/parse error.
+
+```bash
+python .claude/skills/ingest-ti/scripts/ingest_ti.py intel/misp_export.json > /tmp/norm1.json
+python .claude/skills/ingest-ti/scripts/correlate_ti.py /tmp/norm1.json --hayabusa-result artifacts/scan.json
+```
+
+v1 supports native and MISP JSON only — no STIX/TAXII or live TI feed APIs (see `.claude/skills/ingest-ti/SKILL.md`'s "Explicitly out of scope for v1"). Both scripts are unit-tested the normal mocked-nothing way in `tests/test_ingest_ti.py`/`tests/test_correlate_ti.py`, covered by the existing `pytest` job — no dedicated CI job is needed since neither script touches an external binary or network.
+
 ## Lint / Typecheck
 
 ```bash

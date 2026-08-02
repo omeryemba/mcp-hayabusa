@@ -1,0 +1,33 @@
+{
+  "Event": {
+    "uuid": "5f1f1a2e-6b3b-4b9a-9d2e-8a6a1c4e2b10",
+    "info": "Campaign X - credential dumping and C2",
+    "date": "2026-07-25",
+    "Attribute": [
+      {
+        "type": "ip-dst",
+        "value": "198.51.100.23",
+        "category": "Network activity",
+        "comment": "C2 IP",
+        "to_ids": true,
+        "timestamp": "1785196800"
+      },
+      {
+        "type": "sha256",
+        "value": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b85",
+        "category": "Payload delivery",
+        "comment": "Credential-dumping tool sample",
+        "to_ids": true,
+        "timestamp": "1785283200"
+      },
+      {
+        "type": "domain",
+        "value": "update-service.example",
+        "category": "Network activity",
+        "comment": "Lookalike domain used for staging",
+        "to_ids": false,
+        "timestamp": "1785369600"
+      }
+    ]
+  }
+}

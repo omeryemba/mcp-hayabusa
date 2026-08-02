@@ -1,0 +1,31 @@
+{
+  "indicators": [
+    {
+      "type": "ip",
+      "value": "198.51.100.23",
+      "confidence": 0.8,
+      "source": "internal-watchlist-2026-08",
+      "first_seen": "2026-07-28T00:00:00Z",
+      "attack_technique": "T1071.001",
+      "notes": "Observed C2 checkin endpoint for a recent phishing campaign"
+    },
+    {
+      "type": "hash",
+      "value": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b85",
+      "confidence": 0.6,
+      "source": "internal-watchlist-2026-08",
+      "first_seen": "2026-07-29T00:00:00Z",
+      "attack_technique": "T1003.001",
+      "notes": "SHA256 of a credential-dumping tool dropped alongside the campaign"
+    },
+    {
+      "type": "domain",
+      "value": "update-service[.]example",
+      "confidence": 0.5,
+      "source": "internal-watchlist-2026-08",
+      "first_seen": null,
+      "attack_technique": null,
+      "notes": "Suspicious lookalike domain, unconfirmed relation to the campaign"
+    }
+  ]
+}
